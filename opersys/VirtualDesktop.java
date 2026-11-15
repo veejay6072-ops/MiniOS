@@ -7,16 +7,23 @@ import javax.swing.event.InternalFrameEvent;
 import java.awt.*;
 import java.awt.event.AWTEventListener;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyVetoException;
+import java.lang.management.ManagementFactory;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +36,10 @@ import java.util.function.Supplier;
 /** Main window: Windows XP-style desktop with wallpaper, icons, Start menu, taskbar and clock. */
 public class VirtualDesktop extends JFrame {
     private static final int TASKBAR_HEIGHT = 40;
+    private static final int NORMAL_ROWS = 6;      // icons per column in the normal window
+    private static final int MAXIMIZED_ROWS = 7;   // icons per column when the window is big (maximized)
+    private static final int ICON_CELL = 100;
+    private static final int WIDGET_W = 240;   // width of the desktop widgets on the right
 
     // Windows XP "Luna" colors
     private static final Color XP_BLUE_TOP = new Color(61, 130, 240);
@@ -57,7 +68,8 @@ public class VirtualDesktop extends JFrame {
     private final List<AppEntry> apps = new ArrayList<>();
     private final JPopupMenu searchResults = new JPopupMenu();
     private JTextField searchField;
-    private int iconCount = 0;
+    private final List<DesktopIcon> icons = new ArrayList<>();
+    private final List<JComponent> widgets = new ArrayList<>();
     private int windowOffset = 0;
 
     public VirtualDesktop() {
@@ -91,7 +103,8 @@ public class VirtualDesktop extends JFrame {
         registerApp("CPU Scheduling", "CPU", new Color(0, 120, 215), "FCFS, SJF, Priority, RR",
                 "cpu process round robin gantt turnaround waiting", 0, CpuSchedulingApp::new);
         registerApp("Banker's Algorithm", "BA", new Color(200, 60, 60), "Deadlock avoidance",
-                "deadlock safe sequence request resources", 0, DeadlockApp::new);
+                "deadlock safe sequence request resources", 0,
+                () -> new SafeBankController().getView());
         registerApp("Paging", "PG", new Color(40, 150, 80), "Address translation",
                 "page table frame logical physical", 1, PagingApp::new);
         registerApp("Page Replacement", "PR", new Color(140, 80, 200), "FIFO, LRU, OPT",
@@ -105,6 +118,18 @@ public class VirtualDesktop extends JFrame {
         registerApp("Multiprogramming", "MP", new Color(90, 90, 110), "Memory + CPU sharing",
                 "multiprog jobs degree memory", 0, MultiprogrammingApp::new);
         buildStartMenu();
+
+        desktop.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                layoutIcons();
+                layoutWidgets();
+            }
+        });
+        addWidget(new CalendarWidget(WIDGET_W, 252));
+        addWidget(new SystemWidget(WIDGET_W, 118));
+        layoutIcons();
+        layoutWidgets();
 
         clockTimer = new Timer(1000, e -> updateClock());
         clockTimer.start();
@@ -146,14 +171,14 @@ public class VirtualDesktop extends JFrame {
 
     private void registerApp(String title, String badge, Color color, String subtitle, String keywords,
                              int group, Supplier<JPanel> factory) {
-        int column = iconCount / 6;
-        int row = iconCount % 6;
-
         DesktopIcon icon = new DesktopIcon(title, badge, color, () -> openApp(title, factory.get()));
-        icon.setBounds(15 + column * 100, 16 + row * 100, 100, 100);
+        icon.setBounds(0, 0, ICON_CELL, ICON_CELL);   // real position is set in layoutIcons()
+        icons.add(icon);
         if (title.equals("Fragmentation")) icon.setArt(FragmentationApp.desktopIcon());
         if (title.equals("Multiprogramming")) icon.setArt(MultiprogrammingApp.desktopIcon());
         if (title.equals("Disk Scheduling")) icon.setArt(DiskSchedulingApp.desktopIcon());
+        if (title.equals("Banker's Algorithm")) icon.setArt(SafeBankIcon.desktopIcon());
+        if (title.equals("Paging")) icon.setArt(PagingIcon.desktopIcon());
         desktop.add(icon, JLayeredPane.DEFAULT_LAYER);
 
         AppEntry entry = new AppEntry(title, badge, color, subtitle, keywords, group, factory);
@@ -161,8 +186,24 @@ public class VirtualDesktop extends JFrame {
         if (title.equals("Fragmentation")) entry.artFactory = FragmentationIcon::create;
         else if (title.equals("Multiprogramming")) entry.artFactory = MultiprogrammingIcon::create;
         else if (title.equals("Disk Scheduling")) entry.artFactory = DiskSchedulingApp::icon;
+        else if (title.equals("Banker's Algorithm")) entry.artFactory = SafeBankIcon::create;
+        else if (title.equals("Paging")) entry.artFactory = PagingIcon::create;
         apps.add(entry);
-        iconCount++;
+    }
+
+    /**
+     * Places the icons column by column. In the normal window 6 icons fit per column; when the
+     * window is tall (maximized) 7 fit, so Disk Scheduling moves to the bottom of column 1 and
+     * Multiprogramming takes Disk Scheduling's old spot at the top of column 2.
+     */
+    private void layoutIcons() {
+        int fit = (desktop.getHeight() - 16) / ICON_CELL;
+        int rows = Math.max(NORMAL_ROWS, Math.min(MAXIMIZED_ROWS, fit));
+        for (int i = 0; i < icons.size(); i++) {
+            int column = i / rows;
+            int row = i % rows;
+            icons.get(i).setLocation(15 + column * ICON_CELL, 16 + row * ICON_CELL);
+        }
     }
 
     /** One program shown in the Start menu. Group 0 goes in the left column, group 1 in the right. */
@@ -563,7 +604,8 @@ public class VirtualDesktop extends JFrame {
         taskbarTabs.setOpaque(false);
 
         clock.setForeground(Color.WHITE);
-        clock.setFont(new Font("Tahoma", Font.BOLD, 14));
+        clock.setFont(new Font("Tahoma", Font.PLAIN, 12));
+        clock.setHorizontalAlignment(SwingConstants.CENTER);
 
         JPanel tray = new JPanel(new GridBagLayout()) {
             @Override
@@ -585,6 +627,7 @@ public class VirtualDesktop extends JFrame {
         GridBagConstraints gap = new GridBagConstraints();
         gap.insets = new Insets(0, 0, 0, 12);
         tray.add(new TrayArrow(), gap);
+        tray.add(new BatteryIndicator(), gap);   // hides itself if the PC has no battery
         tray.add(clock);
 
         JPanel bar = new JPanel(new BorderLayout()) {
@@ -905,6 +948,149 @@ public class VirtualDesktop extends JFrame {
         @Override
         public Dimension getPreferredSize() {
             return new Dimension(118, TASKBAR_HEIGHT);
+        }
+    }
+
+    /**
+     * Battery icon with the percentage, like the Windows tray. Reads the real laptop battery through
+     * PowerShell every 30 seconds (Windows only). On a PC without a battery it simply stays hidden.
+     */
+    private static class BatteryIndicator extends JComponent {
+        private int percent = -1;
+        private boolean charging;
+        private Process proc;
+        private Thread shutdownHook;
+
+        BatteryIndicator() {
+            setPreferredSize(new Dimension(66, 20));
+            setVisible(false);
+        }
+
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            startReading();
+        }
+
+        @Override
+        public void removeNotify() {
+            stopReading();
+            super.removeNotify();
+        }
+
+        /**
+         * Starts ONE PowerShell that stays open and prints the battery every 2 seconds. This is
+         * much faster than starting PowerShell each time (which took a second or more per read).
+         */
+        private void startReading() {
+            if (proc != null) return;
+            try {
+                String script = "while ($true) { "
+                        + "$b = Get-WmiObject -Class Win32_Battery | Select-Object -First 1; "
+                        + "if ($b) { Write-Output ('BAT ' + $b.EstimatedChargeRemaining + ' ' + $b.BatteryStatus) } "
+                        + "else { Write-Output 'NONE' }; "
+                        + "Start-Sleep -Seconds 2 }";
+                final Process p = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive",
+                        "-Command", script).redirectErrorStream(true).start();
+                p.getOutputStream().close();
+                proc = p;
+                shutdownHook = new Thread(p::destroy);   // don't leave PowerShell running after the app closes
+                Runtime.getRuntime().addShutdownHook(shutdownHook);
+
+                Thread reader = new Thread(() -> {
+                    try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                        String line;
+                        while ((line = r.readLine()) != null) {
+                            line = line.trim();
+                            if (line.startsWith("BAT ")) {
+                                String[] parts = line.substring(4).trim().split("\\s+");
+                                int pct = Integer.parseInt(parts[0]);
+                                int status = parts.length > 1 ? Integer.parseInt(parts[1]) : 1;
+                                SwingUtilities.invokeLater(() -> update(pct, status));
+                            } else if (line.equals("NONE")) {
+                                SwingUtilities.invokeLater(() -> update(-1, 0));
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("Battery: could not read it - " + ex);
+                    }
+                }, "battery-reader");
+                reader.setDaemon(true);
+                reader.start();
+            } catch (Exception ex) {
+                System.err.println("Battery: could not start PowerShell - " + ex);
+            }
+        }
+
+        private void stopReading() {
+            if (proc != null) {
+                proc.destroy();
+                proc = null;
+            }
+            if (shutdownHook != null) {
+                try {
+                    Runtime.getRuntime().removeShutdownHook(shutdownHook);
+                } catch (IllegalStateException ignored) {   // JVM is already shutting down
+                }
+                shutdownHook = null;
+            }
+        }
+
+        private void update(int pct, int status) {
+            boolean wasVisible = isVisible();
+            if (pct < 0) {
+                percent = -1;
+                setVisible(false);
+            } else {
+                percent = Math.max(0, Math.min(100, pct));
+                charging = status == 2 || (status >= 6 && status <= 9);   // 2 = on AC power, 6-9 = charging
+                setVisible(true);
+            }
+            if (wasVisible != isVisible() && getParent() != null) getParent().revalidate();
+            repaint();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            if (percent < 0) return;
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            int bw = 26;
+            int bh = 12;
+            int bx = 0;
+            int by = (getHeight() - bh) / 2;
+
+            // body outline + the little nub on the right
+            g2.setColor(Color.WHITE);
+            g2.setStroke(new BasicStroke(1.4f));
+            g2.drawRoundRect(bx, by, bw - 3, bh, 4, 4);
+            g2.fillRoundRect(bx + bw - 2, by + 3, 3, bh - 6, 2, 2);
+
+            // fill: red when low, green while charging, yellow otherwise (like the Windows tray)
+            Color fill = percent <= 20 ? new Color(232, 60, 50)
+                    : charging ? new Color(80, 210, 90)
+                    : new Color(250, 200, 40);
+            int inner = bw - 7;
+            int fw = Math.max(1, Math.round(inner * percent / 100f));
+            g2.setColor(fill);
+            g2.fillRoundRect(bx + 2, by + 2, fw, bh - 3, 2, 2);
+
+            // lightning bolt while plugged in
+            if (charging) {
+                g2.setColor(new Color(20, 40, 90));
+                int cx = bx + (bw - 3) / 2;
+                int cy = by + bh / 2;
+                g2.fillPolygon(new int[]{cx + 1, cx - 3, cx, cx - 1, cx + 3, cx},
+                        new int[]{cy - 5, cy + 1, cy + 1, cy + 5, cy - 1, cy - 1}, 6);
+            }
+
+            g2.setFont(new Font("Tahoma", Font.BOLD, 12));
+            FontMetrics fm = g2.getFontMetrics();
+            g2.setColor(Color.WHITE);
+            g2.drawString(percent + "%", bw + 5, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+            g2.dispose();
         }
     }
 
@@ -1261,13 +1447,172 @@ public class VirtualDesktop extends JFrame {
         }
     }
 
+    // ---------- desktop widgets ----------
+
+    private void addWidget(JComponent widget) {
+        widgets.add(widget);
+        desktop.add(widget, JLayeredPane.DEFAULT_LAYER);
+    }
+
+    /** Stacks the widgets down the right side of the desktop; hides them if the window is too narrow. */
+    private void layoutWidgets() {
+        boolean room = desktop.getWidth() >= 700;
+        int x = desktop.getWidth() - WIDGET_W - 20;
+        int y = 16;
+        for (JComponent w : widgets) {
+            w.setVisible(room);
+            w.setLocation(x, y);
+            y += w.getHeight() + 14;
+        }
+    }
+
+    /** Translucent rounded card that every desktop widget draws on. Repaints itself on a timer. */
+    private abstract static class WidgetCard extends JComponent {
+        private final Timer refresh;
+
+        WidgetCard(int w, int h, int refreshMs) {
+            setSize(w, h);
+            setPreferredSize(new Dimension(w, h));
+            refresh = new Timer(refreshMs, e -> repaint());
+        }
+
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            refresh.start();
+        }
+
+        @Override
+        public void removeNotify() {
+            refresh.stop();
+            super.removeNotify();
+        }
+
+        abstract void paintContent(Graphics2D g2, int w, int h);
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(new Color(8, 28, 72, 150));
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+            g2.setColor(new Color(255, 255, 255, 70));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+            paintContent(g2, getWidth(), getHeight());
+            g2.dispose();
+        }
+
+        static void centered(Graphics2D g2, String text, int cx, int baseline) {
+            g2.drawString(text, cx - g2.getFontMetrics().stringWidth(text) / 2, baseline);
+        }
+    }
+
+    /** Month calendar with today highlighted. */
+    private static class CalendarWidget extends WidgetCard {
+        CalendarWidget(int w, int h) {
+            super(w, h, 60000);
+        }
+
+        @Override
+        void paintContent(Graphics2D g2, int w, int h) {
+            LocalDate today = LocalDate.now();
+            YearMonth ym = YearMonth.from(today);
+            String title = ym.getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+                    + " " + ym.getYear();
+            g2.setFont(new Font("Trebuchet MS", Font.BOLD, 16));
+            g2.setColor(Color.WHITE);
+            g2.drawString(title, 16, 28);
+
+            String[] names = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
+            int cell = (w - 24) / 7;
+            int x0 = 12;
+            g2.setFont(new Font("Tahoma", Font.BOLD, 11));
+            g2.setColor(new Color(170, 205, 255));
+            for (int i = 0; i < 7; i++) centered(g2, names[i], x0 + i * cell + cell / 2, 54);
+
+            int first = ym.atDay(1).getDayOfWeek().getValue() % 7;   // Sunday = 0
+            g2.setFont(new Font("Tahoma", Font.PLAIN, 12));
+            for (int d = 1; d <= ym.lengthOfMonth(); d++) {
+                int idx = first + d - 1;
+                int cx = x0 + (idx % 7) * cell + cell / 2;
+                int cy = 78 + (idx / 7) * 28;
+                if (d == today.getDayOfMonth()) {
+                    g2.setColor(new Color(49, 106, 197));
+                    g2.fillOval(cx - 12, cy - 12, 24, 24);
+                    g2.setColor(Color.WHITE);
+                    g2.drawOval(cx - 12, cy - 12, 24, 24);
+                }
+                g2.setColor(Color.WHITE);
+                centered(g2, String.valueOf(d), cx, cy + 4);
+            }
+        }
+    }
+
+    /** Live CPU and memory usage of the computer, with small bars. */
+    private static class SystemWidget extends WidgetCard {
+        private final com.sun.management.OperatingSystemMXBean os;
+
+        SystemWidget(int w, int h) {
+            super(w, h, 2000);
+            com.sun.management.OperatingSystemMXBean bean = null;
+            try {
+                bean = (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+            } catch (Throwable ignored) {   // not a JVM that offers these numbers
+            }
+            os = bean;
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        void paintContent(Graphics2D g2, int w, int h) {
+            g2.setFont(new Font("Trebuchet MS", Font.BOLD, 16));
+            g2.setColor(Color.WHITE);
+            g2.drawString("System", 16, 28);
+            if (os == null) {
+                g2.setFont(new Font("Tahoma", Font.PLAIN, 12));
+                g2.drawString("Not available on this Java", 16, 58);
+                return;
+            }
+            double cpu = Math.max(0, Math.min(1, os.getSystemCpuLoad()));
+            long total = os.getTotalPhysicalMemorySize();
+            long used = total - os.getFreePhysicalMemorySize();
+            double mem = total > 0 ? (double) used / total : 0;
+
+            bar(g2, w, "CPU", 54, cpu);
+            bar(g2, w, "RAM", 82, mem);
+            g2.setFont(new Font("Tahoma", Font.PLAIN, 11));
+            g2.setColor(new Color(170, 205, 255));
+            double gb = 1024.0 * 1024.0 * 1024.0;
+            g2.drawString(String.format("%.1f of %.1f GB in use", used / gb, total / gb), 16, 106);
+        }
+
+        private static void bar(Graphics2D g2, int w, String label, int y, double value) {
+            g2.setFont(new Font("Tahoma", Font.BOLD, 12));
+            g2.setColor(Color.WHITE);
+            g2.drawString(label, 16, y + 4);
+            int bx = 54;
+            int bw = w - bx - 58;
+            g2.setColor(new Color(255, 255, 255, 50));
+            g2.fillRoundRect(bx, y - 6, bw, 12, 8, 8);
+            g2.setColor(value < 0.6 ? new Color(90, 205, 100) : value < 0.85 ? new Color(250, 200, 40)
+                    : new Color(232, 60, 50));
+            g2.fillRoundRect(bx, y - 6, Math.max(6, (int) (bw * value)), 12, 8, 8);
+            g2.setColor(Color.WHITE);
+            String pct = Math.round(value * 100) + "%";
+            g2.drawString(pct, w - 16 - g2.getFontMetrics().stringWidth(pct), y + 4);
+        }
+    }
+
     // ---------- windows ----------
 
     /** Opens an app in its own window and adds a taskbar tab for it. */
     public void openApp(String title, JPanel content) {
         JInternalFrame win = new JInternalFrame(title, true, true, true, true);
         win.setContentPane(content);
-        win.setSize(content instanceof FragmentationApp ? new Dimension(860, 640)
+        win.setSize(content instanceof PagingApp ? new Dimension(1000, 720)
+                : content instanceof SafeBankView ? new Dimension(1000, 700)
+                : content instanceof FragmentationApp ? new Dimension(860, 640)
                 : content instanceof MultiprogrammingApp ? new Dimension(900, 650)
                 : content instanceof DiskSchedulingApp ? new Dimension(900, 640) : new Dimension(780, 540));
         if (content instanceof MultiprogrammingApp) win.setFrameIcon(MultiprogrammingIcon.create(16));
@@ -1315,7 +1660,11 @@ public class VirtualDesktop extends JFrame {
 
     private void updateClock() {
         Date now = new Date();
-        clock.setText(new SimpleDateFormat("h:mma").format(now));
+        String time = new SimpleDateFormat("h:mm a").format(now);
+        String date = new SimpleDateFormat("M/d/yyyy").format(now);
+        String text = "<html><div style='text-align:center'><span style='font-size:13px'><b>" + time
+                + "</b></span><br><span style='font-size:10px'>" + date + "</span></div></html>";
+        if (!text.equals(clock.getText())) clock.setText(text);   // only touch the label when it changed
         clock.setToolTipText(new SimpleDateFormat("EEEE, MMMM d, yyyy").format(now));
     }
 }

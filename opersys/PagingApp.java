@@ -1,59 +1,57 @@
 import javax.swing.*;
-import java.awt.BorderLayout;
+import java.awt.*;
 
-/** Paging: splits logical addresses into page number and offset, then maps them to physical addresses. */
+/**
+ * Controller for the Paging screen. Reads what the user typed, asks PagingModel for the answer,
+ * and shows it with PagingView. VirtualDesktop still uses PagingApp::new, so nothing else changes.
+ */
 public class PagingApp extends JPanel {
-    private final JTextField pageSizeField = UiKit.field("1024", 10);
-    private final JTextField addressField = UiKit.field("0, 3500, 2100, 7000, 4096", 30);
-    private final JTextField tableField = UiKit.field("5, 9, -1, 7, 1, 3, 0, 8", 30);
-    private final JTextArea output = UiKit.outputArea();
+    private final PagingView view = new PagingView();
+    private PagingModel.Layout layout;
 
     public PagingApp() {
         super(new BorderLayout());
-        JButton translate = UiKit.button("Translate Addresses");
-        translate.addActionListener(e -> translate());
-        JPanel form = UiKit.form(
-                "Page size (bytes)", pageSizeField,
-                "Logical addresses", addressField,
-                "Page table (frame per page, -1 = not in memory)", tableField);
-        add(UiKit.page(form, UiKit.actionRow(translate), output), BorderLayout.CENTER);
+        add(view, BorderLayout.CENTER);
+        view.setListener(new PagingView.Listener() {
+            @Override
+            public void onRun() {
+                run();
+            }
+
+            @Override
+            public void onFind() {
+                find();
+            }
+        });
     }
 
-    private void translate() {
+    /** Press Run: builds the hotel from the process size, page size, frames and taken frames. */
+    private void run() {
         try {
-            int pageSize = Integer.parseInt(pageSizeField.getText().trim());
-            if (pageSize <= 0) throw new IllegalArgumentException("Page size must be greater than 0.");
-            int[] addresses = UiKit.ints(addressField.getText());
-            int[] table = UiKit.ints(tableField.getText());
+            PagingModel.Layout next = PagingModel.build(
+                    PagingModel.parseWhole(view.getProcessText(), "Process size"),
+                    PagingModel.parseWhole(view.getPageText(), "Page size"),
+                    PagingModel.parseWhole(view.getFramesText(), "Frames"),
+                    PagingModel.parseList(view.getTakenText(), "Taken frames"));
+            layout = next;
+            view.showLayout(layout);
+            find();   // if an address is already typed, translate it right away
+        } catch (IllegalArgumentException ex) {
+            view.showError(ex.getMessage());   // keep the last good layout on screen
+        }
+    }
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("Page table:\n");
-            for (int i = 0; i < table.length; i++) {
-                sb.append(String.format("  Page %d -> %s%n", i, table[i] < 0 ? "not in memory" : "frame " + table[i]));
-            }
-            sb.append("\nTranslations:\n");
-            for (int addr : addresses) {
-                sb.append("  Logical ").append(addr).append(": ");
-                if (addr < 0) {
-                    sb.append("INVALID address\n");
-                    continue;
-                }
-                int page = addr / pageSize;
-                int offset = addr % pageSize;
-                sb.append("page ").append(page).append(", offset ").append(offset).append(" -> ");
-                if (page >= table.length) {
-                    sb.append("TRAP: page number out of range\n");
-                } else if (table[page] < 0) {
-                    sb.append("PAGE FAULT: load the page from disk first\n");
-                } else {
-                    int frame = table[page];
-                    sb.append("frame ").append(frame)
-                            .append(" -> physical address ").append(frame * pageSize + offset).append("\n");
-                }
-            }
-            UiKit.show(output, sb.toString());
-        } catch (RuntimeException ex) {
-            UiKit.error(this, ex.getMessage());
+    /** Translates the typed address. Empty address clears the result. */
+    private void find() {
+        if (layout == null || view.getAddressText().trim().isEmpty()) {
+            view.clearTranslation();
+            return;
+        }
+        try {
+            int address = PagingModel.parseWhole(view.getAddressText(), "Address");
+            view.showTranslation(PagingModel.translate(layout, address));
+        } catch (IllegalArgumentException ex) {
+            view.showError(ex.getMessage());
         }
     }
 }

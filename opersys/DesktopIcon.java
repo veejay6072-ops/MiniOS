@@ -3,11 +3,14 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import javax.swing.*;
 
-/** A desktop shortcut: a colored tile with a badge and a label. Double-click to open. */
+/** A desktop shortcut. Every icon is drawn at the same size and style, with a label under it. Double-click to open. */
 public class DesktopIcon extends JPanel {
+    /** Every desktop icon, custom art or badge, is drawn at this size (same as the Disk Scheduling icon). */
+    static final int TILE = 52;
+
     private final String badge;
     private final Color color;
-    private Icon art;   // optional custom artwork drawn instead of the colored badge tile
+    private Icon art;   // optional custom artwork; scaled to TILE x TILE
 
     public DesktopIcon(String title, String badge, Color color, Runnable onOpen) {
         this.badge = badge;
@@ -42,7 +45,7 @@ public class DesktopIcon extends JPanel {
         add(name, BorderLayout.SOUTH);
 
         if ("Segmentation".equals(title)) {
-            Icon segArt = SegmentationIcon.create(52);
+            Icon segArt = SegmentationIcon.create(TILE);
             if (segArt != null) this.art = segArt;
         }
 
@@ -63,22 +66,60 @@ public class DesktopIcon extends JPanel {
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        int size = 52;
-        int x = (getWidth() - size) / 2;
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        int x = (getWidth() - TILE) / 2;
+
         if (art != null) {
-            art.paintIcon(this, g2, x, 4);
-            g2.dispose();
-            return;
+            // Scale any artwork to exactly TILE x TILE so every icon has the same size and position.
+            int iw = Math.max(1, art.getIconWidth());
+            double k = TILE / (double) iw;
+            g2.translate(x, 4);
+            g2.scale(k, k);
+            art.paintIcon(this, g2, 0, 0);
+        } else {
+            paintTile(g2, x, 4, TILE, color, badge);
         }
-        g2.setColor(color);
-        g2.fillRoundRect(x, 4, size, size, 14, 14);
-        g2.setColor(Color.WHITE);
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
-        FontMetrics fm = g2.getFontMetrics();
-        int textX = x + (size - fm.stringWidth(badge)) / 2;
-        int textY = 4 + (size + fm.getAscent() - fm.getDescent()) / 2;
-        g2.drawString(badge, textX, textY);
         g2.dispose();
+    }
+
+    /**
+     * The shared badge style: a rounded gradient square with a gloss on top and a centered letter.
+     * Matches the Disk Scheduling icon's shape and proportions.
+     */
+    static void paintTile(Graphics2D g2, int x, int y, int s, Color base, String text) {
+        int arc = Math.round(s * 0.28f);
+        float fx = x;
+        float fy = y;
+        g2.setPaint(new GradientPaint(fx, fy, brighten(base, 0.25f), fx, fy + s, darken(base, 0.30f)));
+        g2.fillRoundRect(x, y, s, s, arc, arc);
+
+        // soft gloss over the top half
+        g2.setPaint(new GradientPaint(fx, fy, new Color(255, 255, 255, 90),
+                fx, fy + s * 0.55f, new Color(255, 255, 255, 0)));
+        g2.fillRoundRect(x, y, s, s, arc, arc);
+
+        g2.setFont(new Font("Segoe UI", Font.BOLD, Math.max(9, Math.round(s * 0.30f))));
+        FontMetrics fm = g2.getFontMetrics();
+        int tx = x + (s - fm.stringWidth(text)) / 2;
+        int ty = y + (s + fm.getAscent() - fm.getDescent()) / 2;
+        g2.setColor(new Color(0, 0, 0, 110));
+        g2.drawString(text, tx + 1, ty + 1);
+        g2.setColor(Color.WHITE);
+        g2.drawString(text, tx, ty);
+    }
+
+    private static Color brighten(Color c, float amount) {
+        return new Color(
+                Math.min(255, Math.round(c.getRed() + (255 - c.getRed()) * amount)),
+                Math.min(255, Math.round(c.getGreen() + (255 - c.getGreen()) * amount)),
+                Math.min(255, Math.round(c.getBlue() + (255 - c.getBlue()) * amount)));
+    }
+
+    private static Color darken(Color c, float amount) {
+        return new Color(
+                Math.round(c.getRed() * (1 - amount)),
+                Math.round(c.getGreen() * (1 - amount)),
+                Math.round(c.getBlue() * (1 - amount)));
     }
 
     /** Splits text into at most two lines that fit the width (a long single word is broken with a hyphen). */
