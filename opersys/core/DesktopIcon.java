@@ -1,0 +1,151 @@
+package opersys.core;
+
+import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.*;
+import opersys.segmentation.SegmentationIcon;
+
+/**
+ * A desktop shortcut. Every icon is drawn at the same size and style, with a label under it. Double-click to open.
+ */
+public class DesktopIcon extends JPanel {
+    /** Every desktop icon, custom art or badge, is drawn at this size (same as the Disk Scheduling icon). */
+    static final int TILE = 52;
+
+    private final String badge;
+    private final Color color;
+    private Icon art;   // optional custom artwork; scaled to TILE x TILE
+
+    public DesktopIcon(String title, String badge, Color color, Runnable onOpen) {
+        this.badge = badge;
+        this.color = color;
+        setLayout(new BorderLayout(0, 4));
+        setOpaque(false);
+
+        JLabel name = new JLabel(title, SwingConstants.CENTER) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // White text with an XP-style drop shadow, wrapped onto up to two lines.
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g2.setFont(getFont());
+                FontMetrics fm = g2.getFontMetrics();
+                String[] lines = wrap(getText(), fm, getWidth() - 4);
+                int y = fm.getAscent() + 1;
+                for (String line : lines) {
+                    int x = (getWidth() - fm.stringWidth(line)) / 2;
+                    g2.setColor(new Color(0, 0, 0, 190));
+                    g2.drawString(line, x + 1, y + 1);
+                    g2.setColor(Color.WHITE);
+                    g2.drawString(line, x, y);
+                    y += fm.getHeight();
+                }
+                g2.dispose();
+            }
+        };
+        name.setPreferredSize(new Dimension(0, 38));
+        name.setForeground(Color.WHITE);
+        name.setFont(UiKit.UI_FONT);
+        add(name, BorderLayout.SOUTH);
+
+        if ("Segmentation".equals(title)) {
+            Icon segArt = SegmentationIcon.create(TILE);
+            if (segArt != null) this.art = segArt;
+        }
+
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) onOpen.run();
+            }
+        });
+    }
+
+    public void setArt(Icon art) {
+        this.art = art;
+        repaint();
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        int x = (getWidth() - TILE) / 2;
+
+        if (art != null) {
+            // Scale any artwork to exactly TILE x TILE so every icon has the same size and position.
+            int iw = Math.max(1, art.getIconWidth());
+            double k = TILE / (double) iw;
+            g2.translate(x, 4);
+            g2.scale(k, k);
+            art.paintIcon(this, g2, 0, 0);
+        } else {
+            paintTile(g2, x, 4, TILE, color, badge);
+        }
+        g2.dispose();
+    }
+
+    /**
+     * The shared badge style: a rounded gradient square with a gloss on top and a centered letter.
+     * Matches the Disk Scheduling icon's shape and proportions.
+     */
+    static void paintTile(Graphics2D g2, int x, int y, int s, Color base, String text) {
+        int arc = Math.round(s * 0.28f);
+        float fx = x;
+        float fy = y;
+        g2.setPaint(new GradientPaint(fx, fy, brighten(base, 0.25f), fx, fy + s, darken(base, 0.30f)));
+        g2.fillRoundRect(x, y, s, s, arc, arc);
+
+        // soft gloss over the top half
+        g2.setPaint(new GradientPaint(fx, fy, new Color(255, 255, 255, 90),
+                fx, fy + s * 0.55f, new Color(255, 255, 255, 0)));
+        g2.fillRoundRect(x, y, s, s, arc, arc);
+
+        g2.setFont(new Font("Segoe UI", Font.BOLD, Math.max(9, Math.round(s * 0.30f))));
+        FontMetrics fm = g2.getFontMetrics();
+        int tx = x + (s - fm.stringWidth(text)) / 2;
+        int ty = y + (s + fm.getAscent() - fm.getDescent()) / 2;
+        g2.setColor(new Color(0, 0, 0, 110));
+        g2.drawString(text, tx + 1, ty + 1);
+        g2.setColor(Color.WHITE);
+        g2.drawString(text, tx, ty);
+    }
+
+    private static Color brighten(Color c, float amount) {
+        return new Color(
+                Math.min(255, Math.round(c.getRed() + (255 - c.getRed()) * amount)),
+                Math.min(255, Math.round(c.getGreen() + (255 - c.getGreen()) * amount)),
+                Math.min(255, Math.round(c.getBlue() + (255 - c.getBlue()) * amount)));
+    }
+
+    private static Color darken(Color c, float amount) {
+        return new Color(
+                Math.round(c.getRed() * (1 - amount)),
+                Math.round(c.getGreen() * (1 - amount)),
+                Math.round(c.getBlue() * (1 - amount)));
+    }
+
+    /** Splits text into at most two lines that fit the width (a long single word is broken with a hyphen). */
+    private static String[] wrap(String text, FontMetrics fm, int width) {
+        if (fm.stringWidth(text) <= width) return new String[]{text};
+        int split = -1;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == ' ' && fm.stringWidth(text.substring(0, i)) <= width) split = i;
+        }
+        if (split < 0) {
+            int cut = 1;
+            while (cut < text.length() - 1 && fm.stringWidth(text.substring(0, cut + 1) + "-") <= width) cut++;
+            return new String[]{text.substring(0, cut) + "-", clip(text.substring(cut), fm, width)};
+        }
+        return new String[]{text.substring(0, split), clip(text.substring(split + 1), fm, width)};
+    }
+
+    private static String clip(String text, FontMetrics fm, int width) {
+        if (fm.stringWidth(text) <= width) return text;
+        String t = text;
+        while (t.length() > 1 && fm.stringWidth(t + "...") > width) t = t.substring(0, t.length() - 1);
+        return t + "...";
+    }
+}

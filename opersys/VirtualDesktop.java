@@ -1,3 +1,5 @@
+package opersys;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -33,6 +35,15 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
+import opersys.core.*;
+import opersys.segmentation.*;
+import opersys.diskscheduling.*;
+import opersys.cpuscheduling.*;
+import opersys.paging.*;
+import opersys.pagereplacement.*;
+import opersys.fragmentation.*;
+import opersys.multiprogramming.*;
+import opersys.bankers.*;
 
 /** Main window: Windows XP-style desktop with wallpaper, icons, Start menu, taskbar and clock. */
 public class VirtualDesktop extends JFrame {
@@ -121,22 +132,27 @@ public class VirtualDesktop extends JFrame {
         overlay.setVisible(false);
 
         registerApp("CPU Scheduling", "CPU", new Color(0, 120, 215), "FCFS, SJF, Priority, RR",
-                "cpu process round robin gantt turnaround waiting", 0, CpuSchedulingApp::new);
+                "cpu process round robin gantt turnaround waiting", 0,
+                () -> new CpuController(new CpuSchedulingApp()).getView());
         registerApp("Banker's Algorithm", "BA", new Color(200, 60, 60), "Deadlock avoidance",
                 "deadlock safe sequence request resources", 0,
-                () -> new SafeBankController().getView());
+                () -> new BankController().getView());
         registerApp("Paging", "PG", new Color(40, 150, 80), "Address translation",
                 "page table frame logical physical", 1, PagingApp::new);
         registerApp("Page Replacement", "PR", new Color(140, 80, 200), "FIFO, LRU, OPT",
-                "page replace fault hit optimal", 1, PageReplacementApp::new);
+                "page replace fault hit optimal", 1,
+                () -> new PageReplacementController(new PageReplacementApp()).getView());
         registerApp("Segmentation", "SEG", new Color(230, 140, 20), "Base/limit translation",
-                "segment table base limit trap", 1, SegmentationApp::new);
+                "segment table base limit trap", 1,
+                () -> new SegmentationController(new SegmentationApp()).getView());
         registerApp("Fragmentation", "FRG", new Color(0, 150, 150), "First, Next, Best, Worst Fit",
                 "fragmentation memory allocation hole internal external", 1, FragmentationApp::new);
         registerApp("Disk Scheduling", "DSK", new Color(120, 90, 60), "FCFS, SSTF, SCAN, LOOK",
-                "disk c-scan cylinder head seek history", 0, DiskSchedulingApp::new);
+                "disk c-scan cylinder head seek history", 0,
+                () -> new DiskSchedulingController(new DiskSchedulingApp()).getView());
         registerApp("Multiprogramming", "MP", new Color(90, 90, 110), "Memory + CPU sharing",
-                "multiprog jobs degree memory", 0, MultiprogrammingApp::new);
+                "multiprog jobs degree memory", 0,
+                () -> new MultiprogrammingController(new MultiprogrammingApp()).getView());
         buildStartMenu();
 
         desktop.addComponentListener(new ComponentAdapter() {
@@ -351,7 +367,7 @@ public class VirtualDesktop extends JFrame {
         if (title.equals("Fragmentation")) icon.setArt(FragmentationApp.desktopIcon());
         if (title.equals("Multiprogramming")) icon.setArt(MultiprogrammingApp.desktopIcon());
         if (title.equals("Disk Scheduling")) icon.setArt(DiskSchedulingApp.desktopIcon());
-        if (title.equals("Banker's Algorithm")) icon.setArt(SafeBankIcon.desktopIcon());
+        if (title.equals("Banker's Algorithm")) icon.setArt(BankIcon.desktopIcon());
         if (title.equals("Paging")) icon.setArt(PagingIcon.desktopIcon());
         if (title.equals("CPU Scheduling")) icon.setArt(CpuSchedulingIcon.desktopIcon());
         if (title.equals("Page Replacement")) icon.setArt(PageReplacementIcon.desktopIcon());
@@ -362,7 +378,7 @@ public class VirtualDesktop extends JFrame {
         if (title.equals("Fragmentation")) entry.artFactory = FragmentationIcon::create;
         else if (title.equals("Multiprogramming")) entry.artFactory = MultiprogrammingIcon::create;
         else if (title.equals("Disk Scheduling")) entry.artFactory = DiskSchedulingApp::icon;
-        else if (title.equals("Banker's Algorithm")) entry.artFactory = SafeBankIcon::create;
+        else if (title.equals("Banker's Algorithm")) entry.artFactory = BankIcon::create;
         else if (title.equals("Paging")) entry.artFactory = PagingIcon::create;
         else if (title.equals("CPU Scheduling")) entry.artFactory = CpuSchedulingIcon::create;
         else if (title.equals("Page Replacement")) entry.artFactory = PageReplacementIcon::create;
@@ -1791,7 +1807,7 @@ public class VirtualDesktop extends JFrame {
         JInternalFrame win = new JInternalFrame(title, true, true, true, true);
         win.setContentPane(content);
         win.setSize(content instanceof PagingApp ? new Dimension(1000, 720)
-                : content instanceof SafeBankView ? new Dimension(1000, 700)
+                : content instanceof BankDesign ? new Dimension(1000, 700)
                 : content instanceof FragmentationApp ? new Dimension(860, 640)
                 : content instanceof MultiprogrammingApp ? new Dimension(900, 650)
                 : content instanceof DiskSchedulingApp ? new Dimension(900, 640) : new Dimension(780, 540));
