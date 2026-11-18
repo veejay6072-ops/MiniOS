@@ -26,7 +26,7 @@ public final class SegmentationModel {
     }
 
     public List<SegmentationEngine.Segment> getSegments() {
-        return engine.getSegments();
+        return new ArrayList<>(engine.getSegments());
     }
 
     public int size() {
@@ -46,13 +46,26 @@ public final class SegmentationModel {
     }
 
     /** Add a segment and select it. */
-    public void add(String name, int base, int limit) {
-        engine.add(new SegmentationEngine.Segment(name, base, limit));
+    public void add(String name, String baseText, String limitText) {
+        int base = parseNonNegative(baseText, "Base");
+        int limit = parseNonNegative(limitText, "Limit");
+        if (limit == 0) {
+            throw new IllegalArgumentException("Limit must be greater than 0.");
+        }
+        String segmentName = name == null || name.trim().isEmpty()
+                ? "Seg " + engine.size()
+                : name.trim();
+        engine.add(new SegmentationEngine.Segment(segmentName, base, limit));
         select(engine.size() - 1);
+        lastResult = null;
     }
 
     public void remove(int index) {
+        if (index < 0 || index >= engine.size()) {
+            return;
+        }
         engine.remove(index);
+        lastResult = null;
         if (engine.size() == 0) {
             selected = -1;
         } else {
@@ -93,6 +106,19 @@ public final class SegmentationModel {
         } catch (NumberFormatException ex) {
             return "Segment and offset must be whole numbers.";
         }
+    }
+
+    private static int parseNonNegative(String text, String field) {
+        int value;
+        try {
+            value = Integer.parseInt(text == null ? "" : text.trim());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(field + " must be a whole number.");
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException(field + " cannot be negative.");
+        }
+        return value;
     }
 
     public int total() {

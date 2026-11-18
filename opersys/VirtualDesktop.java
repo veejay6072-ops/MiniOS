@@ -144,7 +144,7 @@ public class VirtualDesktop extends JFrame {
                 () -> new PageReplacementController(new PageReplacementApp()).getView());
         registerApp("Segmentation", "SEG", new Color(230, 140, 20), "Base/limit translation",
                 "segment table base limit trap", 1,
-                () -> new SegmentationController(new SegmentationApp()).getView());
+                () -> new SegmentationController(new SegmentationDesign()).getView());
         registerApp("Fragmentation", "FRG", new Color(0, 150, 150), "First, Next, Best, Worst Fit",
                 "fragmentation memory allocation hole internal external", 1, FragmentationApp::new);
         registerApp("Disk Scheduling", "DSK", new Color(120, 90, 60), "FCFS, SSTF, SCAN, LOOK",

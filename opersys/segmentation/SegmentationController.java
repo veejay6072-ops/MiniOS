@@ -1,59 +1,68 @@
 package opersys.segmentation;
 
 /**
- * SEGMENTATION CONTROLLER = the glue. It connects the design (SegmentationApp) to the logic
+ * SEGMENTATION CONTROLLER = the glue. It connects the design (SegmentationDesign) to the logic
  * (SegmentationModel / SegmentationEngine). It has no layout code and no algorithm code, it only
  * says "screen, give me the numbers" and "screen, show this answer".
  */
-public class SegmentationController {
+public class SegmentationController implements SegmentationDesign.Listener {
 
-    private final SegmentationApp view;
+    private final SegmentationDesign view;
     private final SegmentationModel model = SegmentationModel.create();
 
-    public SegmentationController(SegmentationApp view) {
+    public SegmentationController(SegmentationDesign view) {
         this.view = view;
-        view.bindController(this);
+        view.setListener(this);
+        refreshView();
     }
 
     /** The panel to place inside a window. */
-    public SegmentationApp getView() {
+    public SegmentationDesign getView() {
         return view;
     }
 
-    public SegmentationModel getModel() {
-        return model;
+    @Override
+    public String onAddSegment(String name, String base, String limit) {
+        try {
+            model.add(name, base, limit);
+            view.setSegText(String.valueOf(model.getSelected()));
+            translateQuietly();
+            return null;
+        } catch (IllegalArgumentException ex) {
+            return ex.getMessage();
+        }
     }
 
-    /** Add a segment (called by the view when the user presses "New segment"). */
-    public void addSegment(String name, int base, int limit) {
-        model.add(name, base, limit);
-    }
-
-    /** Remove a segment (called by the view when the user deletes a row). */
-    public void removeSegment(int index) {
+    @Override
+    public void onRemoveSegment(int index) {
         model.remove(index);
+        translateQuietly();
     }
 
-    /** Select a segment (called by the view when the user clicks a row). */
-    public void selectSegment(int index) {
+    @Override
+    public void onSelectSegment(int index) {
         model.select(index);
+        translateQuietly();
     }
 
-    /**
-     * Translate the typed segment/offset. Returns an error message or null on success.
-     * The view should call this when the user presses Translate.
-     */
-    public String translate(String segText, String offText) {
-        return model.translate(segText, offText);
+    @Override
+    public void onTranslate(String segment, String offset) {
+        String error = model.translate(segment, offset);
+        refreshView();
+        if (error != null) {
+            view.showError(error);
+        }
     }
 
-    /** The total memory size (rounded up). */
-    public int total() {
-        return model.total();
+    private void translateQuietly() {
+        int selected = model.getSelected();
+        view.setSegText(selected >= 0 ? String.valueOf(selected) : "");
+        model.translate(view.getSegText(), view.getOffText());
+        refreshView();
     }
 
-    /** The amount of memory in use. */
-    public int used() {
-        return model.used();
+    private void refreshView() {
+        view.setState(model.getSegments(), model.getSelected(), model.getLastResult(),
+                model.total(), model.used());
     }
 }

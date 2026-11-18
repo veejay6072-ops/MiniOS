@@ -12,7 +12,7 @@ import opersys.core.UiKit;
  * Segmentation ("SegDrive" look): a segment table (base/limit), a memory map, and a translator
  * that turns a (segment, offset) logical address into a physical address or a segmentation fault.
  */
-public class SegmentationApp extends JPanel {
+public class SegmentationDesign extends JPanel {
     private static final Color BG = new Color(233, 241, 237);
     private static final Color GREEN = new Color(14, 122, 76);
     private static final Color GREEN_DARK = new Color(10, 92, 58);
@@ -26,35 +26,19 @@ public class SegmentationApp extends JPanel {
     private static final Color[] PALETTE = {
             new Color(86, 190, 255), new Color(255, 178, 72), new Color(126, 224, 138), new Color(200, 130, 255),
             new Color(255, 128, 150), new Color(255, 220, 90), new Color(110, 220, 210), new Color(160, 170, 255)};
-    private static final int MIN_TOTAL = 4000;
-
-    private static final class Segment {
-        final String name;
-        final int base;
-        final int limit;
-
-        Segment(String name, int base, int limit) {
-            this.name = name;
-            this.base = base;
-            this.limit = limit;
-        }
+    public interface Listener {
+        String onAddSegment(String name, String base, String limit);
+        void onRemoveSegment(int index);
+        void onSelectSegment(int index);
+        void onTranslate(String segment, String offset);
     }
 
-    /** Outcome of the last translation. */
-    private static final class Result {
-        static final int OK = 0, FAULT = 1, NO_SEGMENT = 2;
-        int kind;
-        int seg;
-        int offset;
-        int limit;
-        int base;
-        int physical;
-    }
-
-    private final List<Segment> segments = new ArrayList<>();
+    private final List<SegmentationEngine.Segment> segments = new ArrayList<>();
     private int selected = -1;
-    private Result result;
-    private SegmentationController controller;
+    private SegmentationEngine.Result result;
+    private int total = 4000;
+    private int used;
+    private Listener listener;
 
     private final RoundField segField = new RoundField("0", 3);
     private final RoundField offField = new RoundField("100", 5);
@@ -66,7 +50,7 @@ public class SegmentationApp extends JPanel {
     private final JPanel mapBlock = new JPanel();
     private final NavItem[] nav = new NavItem[3];
 
-    public SegmentationApp() {
+    public SegmentationDesign() {
         super(new BorderLayout());
         setBackground(BG);
 
@@ -78,115 +62,49 @@ public class SegmentationApp extends JPanel {
         setView(0);
     }
 
-    // ------------------------------------------------------------------ logic
-
-    private int total() {
-        int end = MIN_TOTAL;
-        for (Segment s : segments) end = Math.max(end, s.base + s.limit);
-        return (int) (Math.ceil(end / 1000.0) * 1000);
+    public void setListener(Listener listener) {
+        this.listener = listener;
     }
 
-    private int used() {
-        int sum = 0;
-        for (Segment s : segments) sum += s.limit;
-        return sum;
-    }
-
-    private void translate(boolean showErrors) {
-        result = null;
-        if (segments.isEmpty()) {
-            if (showErrors) UiKit.error(this, "Add a segment first. Press \"New segment\" on the left.");
-            refresh();
-            return;
-        }
-        if (segField.getText().trim().isEmpty() || offField.getText().trim().isEmpty()) {
-            if (showErrors) UiKit.error(this, "Type both a segment number and an offset.");
-            refresh();
-            return;
-        }
-        try {
-            int seg = Integer.parseInt(segField.getText().trim());
-            int off = Integer.parseInt(offField.getText().trim());
-            Result r = new Result();
-            r.seg = seg;
-            r.offset = off;
-            if (seg < 0 || seg >= segments.size()) {
-                r.kind = Result.NO_SEGMENT;
-            } else {
-                Segment s = segments.get(seg);
-                r.base = s.base;
-                r.limit = s.limit;
-                selected = seg;
-                if (off < 0 || off >= s.limit) {
-                    r.kind = Result.FAULT;
-                } else {
-                    r.kind = Result.OK;
-                    r.physical = s.base + off;
-                }
-            }
-            result = r;
-        } catch (NumberFormatException ex) {
-            if (showErrors) UiKit.error(this, ex.getMessage());
-        }
-        refresh();
-    }
-
-    // ---------- controller API ----------
-
-    /** The controller calls this to wire itself up. */
-    public void bindController(SegmentationController controller) {
-        this.controller = controller;
-    }
-
-    /** The segment text the user typed. */
     public String getSegText() {
         return segField.getText();
     }
 
-    /** The offset text the user typed. */
     public String getOffText() {
         return offField.getText();
     }
 
-    /** Add a segment (name, base, limit). */
-    public void addSegment(String name, int base, int limit) {
-        segments.add(new Segment(name, base, limit));
-        selectRow(segments.size() - 1);
+    public void setSegText(String text) {
+        segField.setText(text);
     }
 
-    /** Remove a segment at the given index. */
-    public void removeSegment(int index) {
-        if (index < 0 || index >= segments.size()) return;
-        segments.remove(index);
-        selected = segments.isEmpty() ? -1 : Math.min(index, segments.size() - 1);
-        segField.setText(selected >= 0 ? String.valueOf(selected) : "");
-        translate(false);
+    public void setState(List<SegmentationEngine.Segment> segments, int selected,
+                         SegmentationEngine.Result result, int total, int used) {
+        this.segments.clear();
+        this.segments.addAll(segments);
+        this.selected = selected;
+        this.result = result;
+        this.total = total;
+        this.used = used;
+        refresh();
     }
 
-    /** Select a segment row. */
-    public void selectRow(int row) {
-        if (row < 0 || row >= segments.size()) return;
-        selected = row;
-        segField.setText(String.valueOf(row));
-        translate(false);
-    }
-
-    /** The total memory size. */
-    public int getTotal() {
-        return total();
-    }
-
-    /** The amount of memory in use. */
-    public int getUsed() {
-        return used();
+    public void showError(String message) {
+        UiKit.error(this, message);
     }
 
     private void removeRow(int row) {
+        if (listener != null) listener.onRemoveSegment(row);
+    }
+
+    private void selectRow(int row) {
         if (row < 0 || row >= segments.size()) return;
-        segments.remove(row);
-        selected = segments.isEmpty() ? -1 : Math.min(row, segments.size() - 1);
-        segField.setText(selected >= 0 ? String.valueOf(selected) : "");
-        translate(false);
+        segField.setText(String.valueOf(row));
+        if (listener != null) listener.onSelectSegment(row);
+    }
+
+    private void requestTranslation() {
+        if (listener != null) listener.onTranslate(getSegText(), getOffText());
     }
 
     private void addSegmentDialog() {
@@ -221,23 +139,16 @@ public class SegmentationApp extends JPanel {
         PillButton add = new PillButton("Add segment");
         PillButton cancel = new PillButton("Cancel", false);
         Runnable submit = () -> {
-            try {
-                String n = name.getText().trim().isEmpty() ? "Seg " + segments.size() : name.getText().trim();
-                int b = Integer.parseInt(base.getText().trim());
-                int l = Integer.parseInt(limit.getText().trim());
-                if (b < 0) throw new IllegalArgumentException("Base cannot be negative.");
-                if (l <= 0) throw new IllegalArgumentException("Limit must be greater than 0.");
-                if (controller != null) controller.addSegment(n, b, l);
-                else {
-                    segments.add(new Segment(n, b, l));
-                    selectRow(segments.size() - 1);
-                }
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                error.setText("Base and limit must be whole numbers.");
-            } catch (RuntimeException ex) {
-                error.setText(ex.getMessage());
+            if (listener == null) {
+                error.setText("Segmentation is not ready yet.");
+                return;
             }
+            String message = listener.onAddSegment(name.getText(), base.getText(), limit.getText());
+            if (message != null) {
+                error.setText(message);
+                return;
+            }
+            dlg.dispose();
         };
         add.addActionListener(e -> submit.run());
         cancel.addActionListener(e -> dlg.dispose());
@@ -274,7 +185,6 @@ public class SegmentationApp extends JPanel {
     }
 
     private void refresh() {
-        int total = total();
         mapTitle.setText("<html><b>Where the segments sit in memory</b> <font color='#8a8a8a'>("
                 + String.format("%,d", total) + " KB total)</font></html>");
         tableView.revalidate();
@@ -311,9 +221,9 @@ public class SegmentationApp extends JPanel {
 
         Pill pill = new Pill();
         PillButton go = new PillButton("Translate");
-        go.addActionListener(e -> translate(true));
-        segField.addActionListener(e -> translate(true));
-        offField.addActionListener(e -> translate(true));
+        go.addActionListener(e -> requestTranslation());
+        segField.addActionListener(e -> requestTranslation());
+        offField.addActionListener(e -> requestTranslation());
         pill.add(new SearchIcon());
         pill.add(small("Segment"));
         pill.add(segField);
@@ -684,8 +594,6 @@ public class SegmentationApp extends JPanel {
             g2.setFont(font(Font.PLAIN, 13));
             g2.setColor(new Color(60, 60, 60));
             g2.drawString("Memory used", 8, 18);
-            int total = total();
-            int used = used();
             g2.setColor(new Color(205, 218, 211));
             g2.fillRoundRect(8, 30, w - 16, 7, 7, 7);
             g2.setColor(used > total ? RED : GREEN);
@@ -754,7 +662,7 @@ public class SegmentationApp extends JPanel {
 
             Font mono = new Font("Consolas", Font.PLAIN, 13);
             for (int i = 0; i < segments.size(); i++) {
-                Segment s = segments.get(i);
+                SegmentationEngine.Segment s = segments.get(i);
                 int y = HEAD + i * ROW;
                 int cy = y + ROW / 2;
                 boolean sel = i == selected;
@@ -808,7 +716,7 @@ public class SegmentationApp extends JPanel {
             Graphics2D g2 = aa(g);
             int w = getWidth();
             int barY = 30, barH = 38;
-            int total = total();
+            int total = SegmentationDesign.this.total;
 
             g2.setColor(new Color(228, 234, 231));
             g2.fillRoundRect(0, barY, w, barH, 12, 12);
@@ -817,7 +725,7 @@ public class SegmentationApp extends JPanel {
                 for (int i = 0; i < segments.size(); i++) {
                     boolean sel = i == selected;
                     if (sel != (pass == 1)) continue;
-                    Segment s = segments.get(i);
+                    SegmentationEngine.Segment s = segments.get(i);
                     int x = (int) Math.round((double) s.base / total * w);
                     int bw = Math.max(8, (int) Math.round((double) s.limit / total * w));
                     g2.setColor(colorOf(i));
@@ -850,7 +758,7 @@ public class SegmentationApp extends JPanel {
             g2.drawString(String.valueOf(total), w - fm.stringWidth(String.valueOf(total)), barY + barH + 16);
 
             // marker for the last translated physical address
-            if (result != null && result.kind == Result.OK) {
+            if (result != null && result.isOk()) {
                 int px = (int) Math.round((double) result.physical / total * w);
                 px = Math.max(5, Math.min(w - 5, px));
                 g2.setColor(GREEN_DARK);
@@ -936,7 +844,7 @@ public class SegmentationApp extends JPanel {
 
             int cy = 46;
             Color edge = new Color(214, 226, 218);
-            Result r = result;
+            SegmentationEngine.Result r = result;
             if (r == null) {
                 g2.setFont(font(Font.PLAIN, 14));
                 g2.setColor(MUTED);
@@ -946,7 +854,7 @@ public class SegmentationApp extends JPanel {
                 x = chip(g2, x, cy, Color.WHITE, edge, 0, null,
                         new Run("Address  ", false, INK), new Run("(" + r.seg + ", " + r.offset + ")", true, INK));
                 x = arrow(g2, x, cy);
-                if (r.kind == Result.OK) {
+                if (r.isOk()) {
                     x = chip(g2, x, cy, Color.WHITE, edge, 1, GREEN,
                             new Run(r.offset + " < limit " + r.limit, false, INK));
                     x = arrow(g2, x, cy);
@@ -954,7 +862,7 @@ public class SegmentationApp extends JPanel {
                             new Run("Physical address  ", false, Color.WHITE),
                             new Run(r.base + " + " + r.offset + " = " + r.physical, true, Color.WHITE));
                 } else {
-                    String why = r.kind == Result.NO_SEGMENT
+                    String why = r.isNoSegment()
                             ? "Segment " + r.seg + " does not exist"
                             : r.offset + (r.offset < 0 ? " is negative" : " \u2265 limit " + r.limit);
                     x = chip(g2, x, cy, RED_SOFT, null, 2, RED, new Run(why, false, RED));
