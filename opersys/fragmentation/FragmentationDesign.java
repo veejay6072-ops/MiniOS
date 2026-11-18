@@ -827,25 +827,39 @@ public class FragmentationDesign extends JPanel {
             if (x < barX || x >= barX + barW || y < top || y >= top + barH) return -1;
 
             List<int[]> runs = state.runs;
-            double scale = barH / (double) state.total;
-            double fixed = 0;
-            int fixedBlocks = 0;
-            for (int[] run : runs) {
-                if (run[1] * scale < 18) {
-                    fixed += 18;
-                    fixedBlocks += run[1];
-                }
-            }
-            double scale2 = Math.max(0.5, (barH - fixed) / Math.max(1, state.total - fixedBlocks));
+            double[] heights = segmentHeights();
             double segmentY = top;
-            for (int[] run : runs) {
-                double height = run[1] * scale < 18 ? 18 : run[1] * scale2;
+            for (int i = 0; i < runs.size(); i++) {
+                int[] run = runs.get(i);
+                double height = heights[i];
                 int y0 = (int) Math.round(segmentY);
                 int y1 = (int) Math.round(segmentY + height);
                 if (y >= y0 && y < y1) return run[2];
                 segmentY += height;
             }
             return -1;
+        }
+
+        private double[] segmentHeights() {
+            int barH = getHeight() - 22 - 4 - 10;
+            List<int[]> runs = state.runs;
+            double scale = barH / (double) state.total;
+            double minH = Math.min(18, barH / (double) runs.size());
+            double fixed = 0;
+            int fixedBlocks = 0;
+            for (int[] run : runs) {
+                if (run[1] * scale < minH) {
+                    fixed += minH;
+                    fixedBlocks += run[1];
+                }
+            }
+            double scale2 = Math.max(0, (barH - fixed) / Math.max(1, state.total - fixedBlocks));
+            double[] heights = new double[runs.size()];
+            for (int i = 0; i < runs.size(); i++) {
+                int[] run = runs.get(i);
+                heights[i] = run[1] * scale < minH ? minH : run[1] * scale2;
+            }
+            return heights;
         }
 
         @Override
@@ -887,17 +901,7 @@ public class FragmentationDesign extends JPanel {
 
             List<int[]> runs = state.runs;
             int n = runs.size();
-            double minH = 18;
-            double scale = barH / (double) state.total;
-            double fixed = 0;
-            int fixedBlocks = 0;
-            for (int[] r : runs) {
-                if (r[1] * scale < minH) {
-                    fixed += minH;
-                    fixedBlocks += r[1];
-                }
-            }
-            double scale2 = Math.max(0.5, (barH - fixed) / Math.max(1, state.total - fixedBlocks));
+            double[] segmentHeights = segmentHeights();
 
             RoundRectangle2D frame = new RoundRectangle2D.Double(barX, top, barW, barH, 44, 44);
             g2.setColor(new Color(8, 4, 24));   // thick shadow on the left and bottom
@@ -911,7 +915,7 @@ public class FragmentationDesign extends JPanel {
             double y = top;
             for (int i = 0; i < n; i++) {
                 int[] r = runs.get(i);
-                double ht = r[1] * scale < minH ? minH : r[1] * scale2;
+                double ht = segmentHeights[i];
                 int y0 = (int) Math.round(y);
                 int y1 = (int) Math.round(y + ht);
                 int hh = y1 - y0;
