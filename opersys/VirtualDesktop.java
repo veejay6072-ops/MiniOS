@@ -32,6 +32,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.prefs.Preferences;
 
 /** Main window: Windows XP-style desktop with wallpaper, icons, Start menu, taskbar and clock. */
 public class VirtualDesktop extends JFrame {
@@ -40,10 +41,10 @@ public class VirtualDesktop extends JFrame {
     private static final int MAXIMIZED_ROWS = 7;   // icons per column when the window is big (maximized)
     private static final int ICON_CELL = 100;
     private static final int WIDGET_W = 240;   // width of the desktop widgets on the right
+    private static final String WALLPAPER_PREF = "wallpaper";   // remembers the chosen wallpaper
+    private static final String PRESET_PREFIX = "preset:";      // value for a built-in wallpaper
 
     // Windows XP "Luna" colors
-    private static final Color XP_BLUE_TOP = new Color(61, 130, 240);
-    private static final Color XP_BLUE = new Color(36, 94, 220);
     private static final Color XP_BLUE_BOTTOM = new Color(22, 60, 170);
     private static final Color XP_GREEN_TOP = new Color(110, 196, 104);
     private static final Color XP_GREEN = new Color(58, 152, 54);
@@ -54,7 +55,9 @@ public class VirtualDesktop extends JFrame {
     private static final int KIND_OFF = 1;
     private static final int KIND_RESTART = 2;
 
-    private final BufferedImage wallpaper = loadWallpaper();
+    private final BufferedImage defaultWallpaper = loadWallpaper();
+    private BufferedImage wallpaper = defaultWallpaper;   // changes when the user picks a new one
+    private final Preferences prefs = Preferences.userNodeForPackage(VirtualDesktop.class);
     private final OverlayPane overlay = new OverlayPane();
     private Timer clockTimer;
     private final JDesktopPane desktop;
@@ -71,6 +74,7 @@ public class VirtualDesktop extends JFrame {
     private final List<DesktopIcon> icons = new ArrayList<>();
     private final List<JComponent> widgets = new ArrayList<>();
     private int windowOffset = 0;
+    private LockScreen lockScreen;
 
     public VirtualDesktop() {
         super("VirtualOS");
@@ -80,6 +84,7 @@ public class VirtualDesktop extends JFrame {
 
         desktop = new JDesktopPane() {
             private BufferedImage cache;
+            private BufferedImage cacheSource;   // which wallpaper the cache was made from
 
             @Override
             protected void paintComponent(Graphics g) {
@@ -89,14 +94,29 @@ public class VirtualDesktop extends JFrame {
                     g2.fillRect(0, 0, getWidth(), getHeight());
                     return;
                 }
-                if (cache == null || cache.getWidth() != getWidth() || cache.getHeight() != getHeight()) {
+                if (cache == null || cacheSource != wallpaper
+                        || cache.getWidth() != getWidth() || cache.getHeight() != getHeight()) {
                     cache = scaleToCover(wallpaper, getWidth(), getHeight());
+                    cacheSource = wallpaper;
                 }
                 g2.drawImage(cache, 0, 0, null);
             }
         };
         add(desktop, BorderLayout.CENTER);
         add(buildTaskbar(), BorderLayout.SOUTH);
+
+        // right-click on an empty part of the desktop opens the wallpaper menu
+        desktop.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) showDesktopMenu(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) showDesktopMenu(e);
+            }
+        });
         setGlassPane(overlay);
         overlay.setVisible(false);
 
@@ -131,6 +151,9 @@ public class VirtualDesktop extends JFrame {
         layoutIcons();
         layoutWidgets();
 
+        loadSavedWallpaper();
+        setupLockScreen();
+
         clockTimer = new Timer(1000, e -> updateClock());
         clockTimer.start();
         updateClock();
@@ -138,19 +161,49 @@ public class VirtualDesktop extends JFrame {
 
     // ---------- wallpaper ----------
 
-    /** Loads bliss.jpg from the classpath, the run folder, or an Image/ subfolder. */
+    /**
+     * Finds bliss.jpg. The old version only looked in a few folders relative to the run folder,
+     * so it failed when the program was started from a different folder (like VS Code's project root).
+     * Now it checks the classpath, then the run folder and each folder above it.
+     */
     private static BufferedImage loadWallpaper() {
-        try {
-            URL url = VirtualDesktop.class.getResource("/bliss.jpg");
-            if (url != null) return ImageIO.read(url);
-            String[] places = {"bliss.jpg", "Image/bliss.jpg", "image/bliss.jpg", "images/bliss.jpg"};
-            for (String place : places) {
-                File file = new File(place);
-                if (file.exists()) return ImageIO.read(file);
-            }
-        } catch (IOException ignored) {
+        URL url = VirtualDesktop.class.getResource("/bliss.jpg");
+        if (url != null) {
+            BufferedImage img = readImage(url);
+            if (img != null) return img;
         }
-        return null;
+
+        List<String> tried = new ArrayList<>();
+        String[] relative = {"bliss.jpg", "Image/bliss.jpg", "image/bliss.jpg",
+                "opersys/Image/bliss.jpg", "opersys/image/bliss.jpg"};
+        for (File dir = new File(System.getProperty("user.dir")).getAbsoluteFile(); dir != null; dir = dir.getParentFile()) {
+            for (String rel : relative) {
+                File file = new File(dir, rel);
+                tried.add(file.getPath());
+                if (file.isFile()) {
+                    BufferedImage img = readImage(file);
+                    if (img != null) return img;
+                }
+            }
+        }
+        System.err.println("Wallpaper: bliss.jpg not found. Looked in:\n" + String.join("\n", tried));
+        return null;   // the desktop then uses the plain blue gradient
+    }
+
+    private static BufferedImage readImage(URL url) {
+        try {
+            return ImageIO.read(url);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static BufferedImage readImage(File file) {
+        try {
+            return ImageIO.read(file);   // returns null if Java cannot decode the file
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /** Scales the image to fill the whole area (like "Fill" in Windows), cropping the overflow. */
@@ -167,6 +220,127 @@ public class VirtualDesktop extends JFrame {
         return out;
     }
 
+    // ---------- lock screen ----------
+
+    /** Covers the whole window with the lock screen. The desktop is hidden until the user signs in. */
+    private void setupLockScreen() {
+        lockScreen = new LockScreen(this::unlock);
+        getLayeredPane().add(lockScreen, JLayeredPane.MODAL_LAYER);
+        // keep the lock screen the same size as the window. Without this it stayed 0x0 and could not be clicked.
+        // resize, maximize, restore and minimize all re-fit the lock screen to the window
+        getLayeredPane().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                fitLockScreen();
+            }
+        });
+        addWindowStateListener(e -> fitLockScreen());
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                fitLockScreen();
+            }
+
+            @Override
+            public void componentShown(ComponentEvent e) {
+                fitLockScreen();
+            }
+        });
+        fitLockScreen();
+        lockScreen.showLock();
+    }
+
+    /** Sizes the lock screen to cover the whole window's content area. */
+    private void fitLockScreen() {
+        JLayeredPane layers = getLayeredPane();   // the window's content area, without the title bar
+        lockScreen.setBounds(0, 0, layers.getWidth(), layers.getHeight());
+        lockScreen.revalidate();
+        lockScreen.repaint();
+    }
+
+    private void unlock() {
+        lockScreen.setVisible(false);
+        desktop.requestFocusInWindow();
+    }
+
+    // ---------- desktop wallpaper ----------
+
+    private void showDesktopMenu(MouseEvent e) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem change = new JMenuItem("Change Wallpaper...");
+        change.addActionListener(a -> chooseWallpaper());
+        JMenuItem reset = new JMenuItem("Default Wallpaper");
+        reset.addActionListener(a -> resetWallpaper());
+        JMenu stock = new JMenu("Wallpapers");
+        for (int i = 0; i < StockWallpapers.NAMES.length; i++) {
+            final int index = i;
+            JMenuItem item = new JMenuItem(StockWallpapers.NAMES[i]);
+            item.addActionListener(a -> applyPreset(index));
+            stock.add(item);
+        }
+        menu.add(stock);
+        menu.addSeparator();
+        menu.add(change);
+        menu.add(reset);
+        menu.show(desktop, e.getX(), e.getY());
+    }
+
+    /** Lets the user pick any picture file from the computer and uses it as the desktop wallpaper. */
+    private void chooseWallpaper() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Choose a wallpaper");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Pictures (jpg, png, gif, bmp)", "jpg", "jpeg", "png", "gif", "bmp"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
+        File file = chooser.getSelectedFile();
+        try {
+            BufferedImage img = ImageIO.read(file);
+            if (img == null) throw new IOException("not a picture");
+            setWallpaper(img);
+            prefs.put(WALLPAPER_PREF, file.getAbsolutePath());   // remembered for next time
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "That file is not a picture this app can open.",
+                    "Wallpaper", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    /** Uses one of the built-in wallpapers and remembers it. */
+    private void applyPreset(int index) {
+        setWallpaper(StockWallpapers.create(index, 1600, 900));
+        prefs.put(WALLPAPER_PREF, PRESET_PREFIX + index);
+    }
+
+    private void resetWallpaper() {
+        prefs.remove(WALLPAPER_PREF);
+        setWallpaper(defaultWallpaper);
+    }
+
+    private void setWallpaper(BufferedImage img) {
+        wallpaper = img;
+        desktop.repaint();
+    }
+
+    /** Uses the wallpaper the user picked last time, if the file is still there. */
+    private void loadSavedWallpaper() {
+        String path = prefs.get(WALLPAPER_PREF, null);
+        if (path == null) return;
+        if (path.startsWith(PRESET_PREFIX)) {
+            try {
+                wallpaper = StockWallpapers.create(Integer.parseInt(path.substring(PRESET_PREFIX.length())), 1600, 900);
+            } catch (RuntimeException ignored) {
+                // unknown preset: keep the default wallpaper
+            }
+            return;
+        }
+        try {
+            BufferedImage img = ImageIO.read(new File(path));
+            if (img != null) wallpaper = img;
+        } catch (IOException ignored) {
+            // the file was moved or deleted: keep the default wallpaper
+        }
+    }
+
     // ---------- apps and Start menu ----------
 
     private void registerApp(String title, String badge, Color color, String subtitle, String keywords,
@@ -179,6 +353,8 @@ public class VirtualDesktop extends JFrame {
         if (title.equals("Disk Scheduling")) icon.setArt(DiskSchedulingApp.desktopIcon());
         if (title.equals("Banker's Algorithm")) icon.setArt(SafeBankIcon.desktopIcon());
         if (title.equals("Paging")) icon.setArt(PagingIcon.desktopIcon());
+        if (title.equals("CPU Scheduling")) icon.setArt(CpuSchedulingIcon.desktopIcon());
+        if (title.equals("Page Replacement")) icon.setArt(PageReplacementIcon.desktopIcon());
         desktop.add(icon, JLayeredPane.DEFAULT_LAYER);
 
         AppEntry entry = new AppEntry(title, badge, color, subtitle, keywords, group, factory);
@@ -188,6 +364,8 @@ public class VirtualDesktop extends JFrame {
         else if (title.equals("Disk Scheduling")) entry.artFactory = DiskSchedulingApp::icon;
         else if (title.equals("Banker's Algorithm")) entry.artFactory = SafeBankIcon::create;
         else if (title.equals("Paging")) entry.artFactory = PagingIcon::create;
+        else if (title.equals("CPU Scheduling")) entry.artFactory = CpuSchedulingIcon::create;
+        else if (title.equals("Page Replacement")) entry.artFactory = PageReplacementIcon::create;
         apps.add(entry);
     }
 
@@ -1263,9 +1441,11 @@ public class VirtualDesktop extends JFrame {
         t.start();
     }
 
+    /** Stand By: the screen goes to the lock screen, like Windows sleep mode. */
     private void standBy() {
-        overlay.show(Color.BLACK, "Click anywhere to wake up");
-        overlay.onClick = overlay::hideOverlay;
+        overlay.hideOverlay();
+        fitLockScreen();   // make sure it covers the window again before showing
+        lockScreen.showLock();
     }
 
     /** Draws an XP-style colored square button face with a white symbol. */
@@ -1617,6 +1797,8 @@ public class VirtualDesktop extends JFrame {
                 : content instanceof DiskSchedulingApp ? new Dimension(900, 640) : new Dimension(780, 540));
         if (content instanceof MultiprogrammingApp) win.setFrameIcon(MultiprogrammingIcon.create(16));
         if (content instanceof DiskSchedulingApp) win.setFrameIcon(DiskSchedulingApp.icon(16));
+        if (content instanceof CpuSchedulingApp) win.setFrameIcon(CpuSchedulingIcon.create(16));
+        if (content instanceof PageReplacementApp) win.setFrameIcon(PageReplacementIcon.create(16));
         win.setLocation(40 + windowOffset, 30 + windowOffset);
         windowOffset = (windowOffset + 30) % 240;
         desktop.add(win);
