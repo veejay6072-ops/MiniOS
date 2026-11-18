@@ -5,7 +5,7 @@
             "type": "java",
             "name": "Run Virtual Desktop",
             "request": "launch",
-            "mainClass": "Main",
+            "mainClass": "opersys.Main",
             "cwd": "${workspaceFolder}"
         }
     ]

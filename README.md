@@ -21,6 +21,4 @@ A Java desktop-style learning app for operating system concepts.
 
 Open the project in VS Code, then run:
 
-    Main.javas
-
-You can also run [Main.java](opersys/Main.java) from VS Code.
+run [Main.java](opersys/Main.java) from VS Code.

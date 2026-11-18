@@ -131,7 +131,7 @@ public class SegmentationApp extends JPanel {
         refresh();
     }
 
-    // ---------- controller-friendly API ----------
+    // ---------- controller API ----------
 
     /** The controller calls this to wire itself up. */
     public void bindController(SegmentationController controller) {
