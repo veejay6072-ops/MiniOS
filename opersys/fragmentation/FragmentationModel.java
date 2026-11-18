@@ -122,6 +122,23 @@ public final class FragmentationModel {
                 + "<br>In a real OS this costs time, because every moved piece has to be copied.", 2);
     }
 
+    public Feedback deleteProcess(int pieceId) {
+        FragmentationEngine.State state = engine.snapshot();
+        if (!state.created) return noMemory();
+        boolean found = false;
+        for (int block : state.memory) {
+            if (block == pieceId) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) return Feedback.error("That process is no longer in memory.");
+
+        FragmentationStep step = engine.deleteProcess(pieceId);
+        record(step);
+        return Feedback.message("PROCESS DELETED", step.summary + ". The freed space is available for new processes.", 2);
+    }
+
     public Feedback reset() {
         if (!engine.snapshot().created) return noMemory();
         record(engine.reset());

@@ -25,6 +25,11 @@ public final class FragmentationController implements FragmentationDesign.Listen
     }
 
     @Override
+    public void onDeleteProcess(int pieceId) {
+        apply(model.deleteProcess(pieceId));
+    }
+
+    @Override
     public void onCompact() {
         apply(model.compact());
     }

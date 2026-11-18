@@ -17,12 +17,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 
 /**
- * Starts the Virtual Desktop. Press Run on this file; nothing else is needed.
- *
- * There is no "package" line on purpose: Main only finds, compiles and starts
- * opersys.VirtualDesktop, so it runs wherever VS Code puts the source root.
- * The compiled classes go into a temporary folder that is deleted when the app closes,
- * so nothing extra appears in the project.
+ Entrypoint for the Virtual Desktop project. Compiles and launches the desktop.
  */
 public class Main {
 

@@ -188,6 +188,31 @@ public final class FragmentationEngine {
         return new CompactResult(step, compacted, unused);
     }
 
+    public FragmentationStep deleteProcess(int pieceId) {
+        if (!created) throw new IllegalStateException("Create memory before deleting a process.");
+        int start = -1;
+        int size = 0;
+        for (int i = 0; i < total; i++) {
+            if (memory[i] == pieceId) {
+                if (start < 0) start = i;
+                size++;
+            }
+        }
+        if (start < 0) throw new IllegalArgumentException("That process is no longer in memory.");
+
+        char name = letter(pieceId);
+        FragmentationStep step = newStep("DELETE", "Process " + name + " removed");
+        for (int i = 0; i < total; i++) {
+            if (memory[i] == pieceId) memory[i] = -1;
+        }
+        step.kind = 2;
+        step.addLine(FragmentationStep.INFO, "Process " + name + " was removed from blocks "
+                + (start + 1) + "-" + (start + size));
+        step.addLine(FragmentationStep.INFO, size + " KB is now unused and may form a new hole");
+        finish(step, "Deleted process " + name + " (" + size + " KB)");
+        return step;
+    }
+
     public FragmentationStep reset() {
         if (!created) throw new IllegalStateException("Create memory before resetting.");
         FragmentationStep step = newStep("RESET", "Memory cleared");

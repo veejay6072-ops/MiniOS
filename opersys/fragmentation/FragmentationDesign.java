@@ -40,6 +40,7 @@ public class FragmentationDesign extends JPanel {
     public interface Listener {
         void onCreateMemory(String sizeText);
         void onDrop(String pieceText, String algorithm);
+        void onDeleteProcess(int pieceId);
         void onCompact();
         void onReset();
         void onClearHistory();
@@ -76,6 +77,9 @@ public class FragmentationDesign extends JPanel {
     private final PillButton memoryTab = new PillButton("Memory", PANEL, TEXT, EDGE);
     private final PillButton stepsTab = new PillButton("Step by Step", PANEL, TEXT, EDGE);
     private final PillButton historyTab = new PillButton("History", PANEL, TEXT, EDGE);
+    private final PillButton deleteButton =
+            new PillButton("DELETE", new Color(255, 120, 160), new Color(40, 28, 90), null);
+    private int selectedPieceId = -1;
 
     private final JScrollPane stepsScroll =
             scroll(placeholder("Press DROP to see, step by step, how a piece is placed."));
@@ -250,6 +254,10 @@ public class FragmentationDesign extends JPanel {
 
         PillButton dropButton = new PillButton("DROP", YELLOW, new Color(40, 28, 90), null);
         dropButton.addActionListener(e -> requestDrop());
+        deleteButton.setVisible(false);
+        deleteButton.addActionListener(e -> {
+            if (listener != null && selectedPieceId >= 0) listener.onDeleteProcess(selectedPieceId);
+        });
 
         RoundPanel capsule = new RoundPanel(new FlowLayout(FlowLayout.LEFT, 8, 6), PANEL, EDGE, 26);
         capsule.add(smallLabel("Piece size"));
@@ -257,6 +265,7 @@ public class FragmentationDesign extends JPanel {
         capsule.add(smallLabel("KB"));
         capsule.add(algoBox);
         capsule.add(dropButton);
+        capsule.add(deleteButton);
 
         JPanel wrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         wrap.setOpaque(false);
@@ -504,6 +513,7 @@ public class FragmentationDesign extends JPanel {
 
     private void refresh() {
         if (state == null || !state.created) {
+            selectPiece(-1);
             freeCard.setValue("-");
             biggestCard.setValue("-");
             holesCard.setValue("-");
@@ -516,6 +526,7 @@ public class FragmentationDesign extends JPanel {
             return;
         }
 
+        if (selectedPieceId >= 0 && !containsPiece(state.runs, selectedPieceId)) selectPiece(-1);
         int size = state.previewSize;
         List<int[]> hs = state.holes;
         int free = 0;
@@ -544,6 +555,23 @@ public class FragmentationDesign extends JPanel {
                 ? "<html><b>Process " + letter(state.nextId) + "</b> - type a piece size</html>"
                 : "<html><b>Process " + letter(state.nextId) + "</b> - " + size + " KB in a row</html>");
         bar.repaint();
+    }
+
+    private void selectPiece(int pieceId) {
+        selectedPieceId = pieceId;
+        deleteButton.setVisible(pieceId >= 0);
+        if (pieceId >= 0) {
+            deleteButton.setText("DELETE " + letter(pieceId));
+            deleteButton.setToolTipText("Delete process " + letter(pieceId) + " from memory");
+        }
+        bar.repaint();
+    }
+
+    private static boolean containsPiece(List<int[]> runs, int pieceId) {
+        for (int[] run : runs) {
+            if (run[2] == pieceId) return true;
+        }
+        return false;
     }
 
     /** kind: 0 = info, 1 = can't fit, 2 = success. */
@@ -780,6 +808,44 @@ public class FragmentationDesign extends JPanel {
         MemoryBar() {
             setOpaque(false);
             setPreferredSize(new Dimension(340, 380));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setToolTipText("Click an allocated process to select it for deletion");
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    selectPiece(processAt(e.getX(), e.getY()));
+                }
+            });
+        }
+
+        private int processAt(int x, int y) {
+            if (state == null || !state.created) return -1;
+            int barW = 136;
+            int barX = (getWidth() - barW) / 2 + 4;
+            int top = 4;
+            int barH = getHeight() - 22 - top - 10;
+            if (x < barX || x >= barX + barW || y < top || y >= top + barH) return -1;
+
+            List<int[]> runs = state.runs;
+            double scale = barH / (double) state.total;
+            double fixed = 0;
+            int fixedBlocks = 0;
+            for (int[] run : runs) {
+                if (run[1] * scale < 18) {
+                    fixed += 18;
+                    fixedBlocks += run[1];
+                }
+            }
+            double scale2 = Math.max(0.5, (barH - fixed) / Math.max(1, state.total - fixedBlocks));
+            double segmentY = top;
+            for (int[] run : runs) {
+                double height = run[1] * scale < 18 ? 18 : run[1] * scale2;
+                int y0 = (int) Math.round(segmentY);
+                int y1 = (int) Math.round(segmentY + height);
+                if (y >= y0 && y < y1) return run[2];
+                segmentY += height;
+            }
+            return -1;
         }
 
         @Override
@@ -872,6 +938,11 @@ public class FragmentationDesign extends JPanel {
                     g2.fillRect(barX, y1 - 4, barW, 4);
                     g2.setColor(new Color(255, 255, 255, 70));   // light edge at the top
                     g2.fillRect(barX, y0, barW, 2);
+                    if (r[2] == selectedPieceId) {
+                        g2.setColor(Color.WHITE);
+                        g2.setStroke(new BasicStroke(3f));
+                        g2.drawRect(barX + 2, y0 + 2, barW - 5, Math.max(1, hh - 5));
+                    }
                 }
                 if (i > 0) {
                     g2.setColor(divider);
