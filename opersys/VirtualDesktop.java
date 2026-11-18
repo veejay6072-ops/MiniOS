@@ -382,6 +382,7 @@ public class VirtualDesktop extends JFrame {
         else if (title.equals("Paging")) entry.artFactory = PagingIcon::create;
         else if (title.equals("CPU Scheduling")) entry.artFactory = CpuSchedulingIcon::create;
         else if (title.equals("Page Replacement")) entry.artFactory = PageReplacementIcon::create;
+        else if (title.equals("Segmentation")) entry.artFactory = SegmentationIcon::create;
         apps.add(entry);
     }
 
@@ -1815,6 +1816,7 @@ public class VirtualDesktop extends JFrame {
         if (content instanceof DiskSchedulingApp) win.setFrameIcon(DiskSchedulingApp.icon(16));
         if (content instanceof CpuSchedulingApp) win.setFrameIcon(CpuSchedulingIcon.create(16));
         if (content instanceof PageReplacementApp) win.setFrameIcon(PageReplacementIcon.create(16));
+        if ("Segmentation".equals(title)) win.setFrameIcon(SegmentationIcon.create(16));
         win.setLocation(40 + windowOffset, 30 + windowOffset);
         windowOffset = (windowOffset + 30) % 240;
         desktop.add(win);
