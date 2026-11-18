@@ -1,21 +1,21 @@
 package opersys.pagereplacement;
 
 /**
- * PAGE REPLACEMENT CONTROLLER = the glue. It connects the design (PageReplacementApp) to the logic
+ * PAGE REPLACEMENT CONTROLLER = the glue. It connects the design (PageReplacementDesign) to the logic
  * (PageReplacementModel / PageReplacement). It has no layout code and no algorithm code, it only
  * says "screen, give me the numbers" and "screen, show this answer".
  */
 public class PageReplacementController {
 
-    private final PageReplacementApp view;
+    private final PageReplacementDesign view;
 
-    public PageReplacementController(PageReplacementApp view) {
+    public PageReplacementController(PageReplacementDesign view) {
         this.view = view;
         view.setListener(this::runSimulation);
     }
 
     /** The panel to place inside a window. */
-    public PageReplacementApp getView() {
+    public PageReplacementDesign getView() {
         return view;
     }
 

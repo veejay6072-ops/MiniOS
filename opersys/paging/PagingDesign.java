@@ -10,7 +10,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
 /** DESIGN ONLY. The PageStay paging screen. It shows what the controller gives it and has no paging rules. */
-public class PagingView extends JPanel {
+public class PagingDesign extends JPanel {
 
     public interface Listener {
         void onRun();
@@ -60,7 +60,7 @@ public class PagingView extends JPanel {
     private final JPanel errorBanner = new JPanel(new BorderLayout());
     private final JLabel errorText = label("", 13, ACCENT);
 
-    public PagingView() {
+    public PagingDesign() {
         super(new BorderLayout());
         setBackground(PAGE_BG);
 

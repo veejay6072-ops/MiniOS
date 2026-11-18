@@ -2,6 +2,8 @@ package opersys.multiprogramming;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * MULTIPROGRAMMING MODEL = the middleman between the screen and the simulation. LOGIC ONLY, no Swing here.
@@ -28,8 +30,19 @@ public final class MultiprogrammingModel {
         }
     }
 
-    /** Reads the raw text from the screen and runs the simulation. Throws IllegalArgumentException on bad input. */
-    public static MultiprogrammingApp.Run build(String jobsText, String memoryText, String quantumText) {
+    public static final class Run extends MultiprogrammingEngine.Result {
+        public int number;
+        public String time;
+        public String input;
+
+        private Run(MultiprogrammingEngine.Result result) {
+            super(result.memory, result.quantum, result.total, result.maxDegree, result.jobs,
+                    result.steps, result.summary);
+        }
+    }
+
+    /** Reads the text fields, validates them, and returns a simulation result. */
+    public static Run build(String jobsText, String memoryText, String quantumText) {
         List<JobInput> inputs = parseJobs(jobsText);
         int totalMemory = parseWhole(memoryText, "Total memory");
         int quantum = parseWhole(quantumText, "Quantum");
@@ -39,11 +52,15 @@ public final class MultiprogrammingModel {
             if (j.memory > totalMemory)
                 throw new IllegalArgumentException(j.name + " needs more memory than the system has.");
         }
-        List<MultiprogrammingApp.Job> jobs = new ArrayList<>();
+        List<MultiprogrammingEngine.Job> jobs = new ArrayList<>();
         for (JobInput in : inputs) {
-            jobs.add(new MultiprogrammingApp.Job(jobs.size(), in.name, in.memory, in.burst));
+            jobs.add(new MultiprogrammingEngine.Job(jobs.size(), in.name, in.memory, in.burst));
         }
-        return MultiprogrammingApp.simulate(jobs, totalMemory, quantum);
+        MultiprogrammingEngine.Result result = MultiprogrammingEngine.simulate(jobs, totalMemory, quantum);
+        Run run = new Run(result);
+        run.input = jobsText.trim();
+        run.time = new SimpleDateFormat("HH:mm:ss").format(new Date());
+        return run;
     }
 
     /** Parses "A:200:5, B:300:3" into a list of jobs. */

@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * The CPU scheduling LOGIC only: FCFS, SJF, Priority (non-preemptive) and Round Robin.
  * Nothing in this file knows about Swing, so it can be tested or reused without any GUI.
- * The GUI (CpuSchedulingApp) just calls {@link #run} and draws the {@link Result}.
+ * The GUI (CpuSchedulingDesign) just calls {@link #run} and draws the {@link Result}.
  */
 public final class CpuScheduler {
     private CpuScheduler() {

@@ -133,26 +133,27 @@ public class VirtualDesktop extends JFrame {
 
         registerApp("CPU Scheduling", "CPU", new Color(0, 120, 215), "FCFS, SJF, Priority, RR",
                 "cpu process round robin gantt turnaround waiting", 0,
-                () -> new CpuController(new CpuSchedulingApp()).getView());
+                () -> new CpuController(new CpuSchedulingDesign()).getView());
         registerApp("Banker's Algorithm", "BA", new Color(200, 60, 60), "Deadlock avoidance",
                 "deadlock safe sequence request resources", 0,
                 () -> new BankController().getView());
         registerApp("Paging", "PG", new Color(40, 150, 80), "Address translation",
-                "page table frame logical physical", 1, PagingApp::new);
+                "page table frame logical physical", 1, () -> new PagingController().getView());
         registerApp("Page Replacement", "PR", new Color(140, 80, 200), "FIFO, LRU, OPT",
                 "page replace fault hit optimal", 1,
-                () -> new PageReplacementController(new PageReplacementApp()).getView());
+                () -> new PageReplacementController(new PageReplacementDesign()).getView());
         registerApp("Segmentation", "SEG", new Color(230, 140, 20), "Base/limit translation",
                 "segment table base limit trap", 1,
                 () -> new SegmentationController(new SegmentationDesign()).getView());
         registerApp("Fragmentation", "FRG", new Color(0, 150, 150), "First, Next, Best, Worst Fit",
-                "fragmentation memory allocation hole internal external", 1, FragmentationApp::new);
+                "fragmentation memory allocation hole internal external", 1,
+                () -> new FragmentationController().getView());
         registerApp("Disk Scheduling", "DSK", new Color(120, 90, 60), "FCFS, SSTF, SCAN, LOOK",
                 "disk c-scan cylinder head seek history", 0,
-                () -> new DiskSchedulingController(new DiskSchedulingApp()).getView());
+                () -> new DiskSchedulingController(new DiskSchedulingDesign()).getView());
         registerApp("Multiprogramming", "MP", new Color(90, 90, 110), "Memory + CPU sharing",
                 "multiprog jobs degree memory", 0,
-                () -> new MultiprogrammingController(new MultiprogrammingApp()).getView());
+                () -> new MultiprogrammingController(new MultiprogrammingDesign()).getView());
         buildStartMenu();
 
         desktop.addComponentListener(new ComponentAdapter() {
@@ -1807,15 +1808,15 @@ public class VirtualDesktop extends JFrame {
     public void openApp(String title, JPanel content) {
         JInternalFrame win = new JInternalFrame(title, true, true, true, true);
         win.setContentPane(content);
-        win.setSize(content instanceof PagingApp ? new Dimension(1000, 720)
+        win.setSize(content instanceof PagingDesign ? new Dimension(1000, 720)
                 : content instanceof BankDesign ? new Dimension(1000, 700)
-                : content instanceof FragmentationApp ? new Dimension(860, 640)
-                : content instanceof MultiprogrammingApp ? new Dimension(900, 650)
-                : content instanceof DiskSchedulingApp ? new Dimension(900, 640) : new Dimension(780, 540));
-        if (content instanceof MultiprogrammingApp) win.setFrameIcon(MultiprogrammingIcon.create(16));
-        if (content instanceof DiskSchedulingApp) win.setFrameIcon(DiskSchedulingApp.icon(16));
-        if (content instanceof CpuSchedulingApp) win.setFrameIcon(CpuSchedulingIcon.create(16));
-        if (content instanceof PageReplacementApp) win.setFrameIcon(PageReplacementIcon.create(16));
+                : content instanceof FragmentationDesign ? new Dimension(860, 640)
+                : content instanceof MultiprogrammingDesign ? new Dimension(900, 650)
+                : content instanceof DiskSchedulingDesign ? new Dimension(900, 640) : new Dimension(780, 540));
+        if (content instanceof MultiprogrammingDesign) win.setFrameIcon(MultiprogrammingIcon.create(16));
+        if (content instanceof DiskSchedulingDesign) win.setFrameIcon(DiskSchedulingApp.icon(16));
+        if (content instanceof CpuSchedulingDesign) win.setFrameIcon(CpuSchedulingIcon.create(16));
+        if (content instanceof PageReplacementDesign) win.setFrameIcon(PageReplacementIcon.create(16));
         if ("Segmentation".equals(title)) win.setFrameIcon(SegmentationIcon.create(16));
         win.setLocation(40 + windowOffset, 30 + windowOffset);
         windowOffset = (windowOffset + 30) % 240;

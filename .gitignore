@@ -1,4 +1,6 @@
 *.class
 bin/
 obj/
-.vscode/
+.vscode/*
+!.vscode/
+!.vscode/settings.json

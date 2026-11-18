@@ -4,22 +4,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * CPU CONTROLLER = the glue. It connects the design (CpuSchedulingApp) to the logic (CpuModel / CpuScheduler).
+ * CPU CONTROLLER = the glue. It connects the design (CpuSchedulingDesign) to the logic (CpuModel / CpuScheduler).
  * It has no layout code and no algorithm code, it only says "screen, give me the numbers" and
  * "screen, show this answer".
  */
 public class CpuController {
 
-    private final CpuSchedulingApp view;
+    private final CpuSchedulingDesign view;
     private CpuModel.Result result;
 
-    public CpuController(CpuSchedulingApp view) {
+    public CpuController(CpuSchedulingDesign view) {
         this.view = view;
         view.setListener(this::runSimulation);
     }
 
     /** The panel to place inside a window. */
-    public CpuSchedulingApp getView() {
+    public CpuSchedulingDesign getView() {
         return view;
     }
 
@@ -33,7 +33,7 @@ public class CpuController {
             }
 
             List<CpuModel.JobInput> jobs = new ArrayList<>();
-            for (CpuSchedulingApp.ProcessRow row : view.getProcessRows()) {
+            for (CpuSchedulingDesign.ProcessRow row : view.getProcessRows()) {
                 String name = "P" + (row.getIndex() + 1);
                 jobs.add(new CpuModel.JobInput(name, row.getArrivalText(),
                         row.getBurstText(), row.getPriorityText()));

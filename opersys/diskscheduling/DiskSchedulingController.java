@@ -1,22 +1,22 @@
 package opersys.diskscheduling;
 
 /**
- * DISK SCHEDULING CONTROLLER = the glue. It connects the design (DiskSchedulingApp) to the logic
+ * DISK SCHEDULING CONTROLLER = the glue. It connects the design (DiskSchedulingDesign) to the logic
  * (DiskSchedulingModel / DiskScheduler / DiskHistory). It has no layout code and no algorithm code,
  * it only says "screen, give me the numbers" and "screen, show this answer".
  */
 public class DiskSchedulingController {
 
-    private final DiskSchedulingApp view;
+    private final DiskSchedulingDesign view;
     private final DiskHistory history = new DiskHistory();
 
-    public DiskSchedulingController(DiskSchedulingApp view) {
+    public DiskSchedulingController(DiskSchedulingDesign view) {
         this.view = view;
         view.bindController(this);
     }
 
     /** The panel to place inside a window. */
-    public DiskSchedulingApp getView() {
+    public DiskSchedulingDesign getView() {
         return view;
     }
 

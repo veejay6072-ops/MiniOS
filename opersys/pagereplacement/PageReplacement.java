@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Page replacement LOGIC only: FIFO, LRU and Optimal (OPT).
- * Nothing in this file knows about Swing. The GUI (PageReplacementApp) calls {@link #run}
+ * Nothing in this file knows about Swing. The GUI (PageReplacementDesign) calls {@link #run}
  * and draws the {@link Result}.
  */
 public final class PageReplacement {
