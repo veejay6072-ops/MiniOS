@@ -1,3 +1,7 @@
+## Screenshot link
+
+- [link](https://docs.google.com/document/d/1nMui8qIu-kQMKUfR59ld5_vSFDCTAJJnKafUPUqoU38/edit?tab=t.0)
+
 ## What is included
 
 - CPU Scheduling
