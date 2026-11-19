@@ -391,7 +391,8 @@ public class CpuSchedulingDesign extends JPanel {
 
     private void onAlgorithmChanged() {
         Object selected = algoBox.getSelectedItem();
-        boolean priority = selected == CpuScheduler.Algorithm.PRIORITY;
+        boolean priority = selected == CpuScheduler.Algorithm.PRIORITY
+                || selected == CpuScheduler.Algorithm.PREEMPTIVE_PRIORITY;
         boolean roundRobin = selected == CpuScheduler.Algorithm.ROUND_ROBIN;
         for (ProcessRow r : rows) r.setPriorityVisible(priority);
         quantumField.setEnabled(roundRobin);
@@ -402,7 +403,9 @@ public class CpuSchedulingDesign extends JPanel {
 
     private void addProcess() {
         ProcessRow row = new ProcessRow();
-        row.setPriorityVisible(algoBox.getSelectedItem() == CpuScheduler.Algorithm.PRIORITY);
+        Object selected = algoBox.getSelectedItem();
+        row.setPriorityVisible(selected == CpuScheduler.Algorithm.PRIORITY
+                || selected == CpuScheduler.Algorithm.PREEMPTIVE_PRIORITY);
         rows.add(row);
         refreshQueue();
         SwingUtilities.invokeLater(() -> {

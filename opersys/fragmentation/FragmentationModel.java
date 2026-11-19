@@ -69,8 +69,8 @@ public final class FragmentationModel {
             return Feedback.message("MEMORY SIZE",
                     "Type the memory size as a whole number of KB, for example 72.", 1);
         }
-        if (size < 1 || size > 1000) {
-            return Feedback.message("MEMORY SIZE", "The memory size must be between 1 and 1000 KB.", 1);
+        if (size < 1) {
+            return Feedback.message("MEMORY SIZE", "The memory size must be at least 1 KB.", 1);
         }
         record(engine.createMemory(size));
         return Feedback.message("MEMORY CREATED!", "Your memory is " + size + " KB and completely empty."

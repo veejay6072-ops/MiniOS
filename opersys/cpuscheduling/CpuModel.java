@@ -113,7 +113,8 @@ public final class CpuModel {
             int arrival = parseNonNegative(j.getArrival(), "Arrival time of " + name);
             int burst = parsePositive(j.getBurst(), "Burst time of " + name);
             int priority = 0;
-            if (algorithm == CpuScheduler.Algorithm.PRIORITY) {
+            if (algorithm == CpuScheduler.Algorithm.PRIORITY
+                    || algorithm == CpuScheduler.Algorithm.PREEMPTIVE_PRIORITY) {
                 priority = parseNonNegative(j.getPriority(), "Priority of " + name);
             }
             parsed.add(new CpuScheduler.Job(name, arrival, burst, priority));

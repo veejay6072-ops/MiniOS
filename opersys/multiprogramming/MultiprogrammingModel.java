@@ -7,10 +7,6 @@ import java.util.List;
 
 /**
  * MULTIPROGRAMMING MODEL = the middleman between the screen and the simulation. LOGIC ONLY, no Swing here.
- *
- * The screen only has text boxes, so everything arrives as text ("A 200 5", "800", "2"...).
- * This class turns that text into real numbers (complaining nicely if something is wrong),
- * runs the simulation, and packs the answer into a Result for the controller.
  */
 public final class MultiprogrammingModel {
 

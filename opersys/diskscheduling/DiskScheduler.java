@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Disk-scheduling algorithms (FCFS, SSTF, SCAN, C-SCAN, LOOK). Pure logic with no UI, so the
+ * Disk-scheduling algorithms (FCFS, SSTF, SCAN, C-SCAN, LOOK, C-LOOK). Pure logic with no UI, so the
  * answers can be checked on their own.
  *
  * Conventions (the usual textbook ones):
@@ -15,16 +15,17 @@ import java.util.List;
  *  - C-SCAN: like SCAN, but after reaching the end the head jumps to the opposite end and
  *    sweeps the same way again. That jump IS counted as head movement.
  *  - LOOK: like SCAN, but it reverses at the last request instead of the disk edge.
+ *  - C-LOOK: like C-SCAN, but it jumps between the farthest pending requests instead of the disk edges.
  *  - A request on the head's own track is served first (0 movement).
  */
 public final class DiskScheduler {
-    public static final String[] ALGORITHMS = {"FCFS", "SSTF", "SCAN", "C-SCAN", "LOOK"};
+    public static final String[] ALGORITHMS = {"FCFS", "SSTF", "SCAN", "C-SCAN", "LOOK", "C-LOOK"};
 
     /** Why the head stops at a track. */
     public enum Kind {
         REQUEST,   // a real request
         EDGE,      // the head ran to the end of the disk (SCAN / C-SCAN)
-        JUMP       // C-SCAN's return jump to the opposite end
+        JUMP       // C-SCAN / C-LOOK wraparound jump
     }
 
     public static final class Stop {
@@ -42,32 +43,50 @@ public final class DiskScheduler {
 
     /** True for the algorithms where the starting direction changes the result. */
     public static boolean usesDirection(String algo) {
-        return algo.equals("SCAN") || algo.equals("C-SCAN") || algo.equals("LOOK");
+        return algo.equals("SCAN") || algo.equals("C-SCAN") || algo.equals("LOOK") || algo.equals("C-LOOK");
     }
 
     public static List<Stop> schedule(int[] requests, int head, int maxTrack, boolean up, String algo) {
         List<Stop> out = new ArrayList<>();
         switch (algo) {
             case "FCFS":
+                // FCFS: serve requests in the exact order they entered the queue.
                 for (int r : requests) out.add(new Stop(r, Kind.REQUEST));
                 break;
             case "SSTF":
+                // SSTF: repeatedly serve the request closest to the current head position.
                 sstf(requests, head, out);
                 break;
             case "SCAN":
+                // SCAN: sweep to the disk edge, reverse, then serve requests behind the head.
                 sweep(requests, head, maxTrack, up, true, out);
                 for (int r : behind(requests, head, up)) out.add(new Stop(r, Kind.REQUEST));
                 break;
             case "LOOK":
+                // LOOK: sweep only as far as the last request, then reverse to serve the rest.
                 sweep(requests, head, maxTrack, up, false, out);
                 for (int r : behind(requests, head, up)) out.add(new Stop(r, Kind.REQUEST));
                 break;
             case "C-SCAN": {
+                // C-SCAN: reach the disk edge, jump to the opposite edge, and sweep in the same direction.
                 sweep(requests, head, maxTrack, up, true, out);
                 List<Integer> wrapped = wrapped(requests, head, up);
                 if (!wrapped.isEmpty()) {
                     out.add(new Stop(up ? 0 : maxTrack, Kind.JUMP));
                     for (int r : wrapped) out.add(new Stop(r, Kind.REQUEST));
+                }
+                break;
+            }
+            case "C-LOOK": {
+                // C-LOOK: sweep to the last request, jump to the farthest request on the other side,
+                // and continue in the same direction without traveling to either disk edge.
+                sweep(requests, head, maxTrack, up, false, out);
+                List<Integer> wrapped = wrapped(requests, head, up);
+                if (!wrapped.isEmpty()) {
+                    out.add(new Stop(wrapped.get(0), Kind.JUMP));
+                    for (int i = 1; i < wrapped.size(); i++) {
+                        out.add(new Stop(wrapped.get(i), Kind.REQUEST));
+                    }
                 }
                 break;
             }
@@ -88,8 +107,9 @@ public final class DiskScheduler {
         return total;
     }
 
-    // ---- helpers ----
+    // ---- algorithm helpers ----
 
+    /** SSTF selection: choose the nearest unserved request, retaining queue order on ties. */
     private static void sstf(int[] requests, int head, List<Stop> out) {
         List<Integer> left = new ArrayList<>();
         for (int r : requests) left.add(r);
@@ -104,7 +124,7 @@ public final class DiskScheduler {
         }
     }
 
-    /** The first sweep: requests in the direction of travel, then (optionally) the disk edge. */
+    /** SCAN / C-SCAN / LOOK / C-LOOK first sweep: requests ahead, then optionally the disk edge. */
     private static void sweep(int[] requests, int head, int maxTrack, boolean up, boolean toEdge, List<Stop> out) {
         List<Integer> ahead = new ArrayList<>();
         for (int r : requests) {

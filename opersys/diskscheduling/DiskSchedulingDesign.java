@@ -881,12 +881,12 @@ public class DiskSchedulingDesign extends JPanel {
                 g.drawString(line, tx, y);
                 y += 17;
             }
-            if (algo.equals("C-SCAN")) {
+            if (algo.equals("C-SCAN") || algo.equals("C-LOOK")) {
                 for (int i = 0; i < stops.size(); i++) {
                     if (stops.get(i).kind == DiskScheduler.Kind.JUMP) {
                         g.setFont(font(Font.ITALIC, 12));
                         g.setColor(DIM);
-                        g.drawString("The " + dist[i] + "-track return jump is counted.", tx, y + 2);
+                        g.drawString("The " + dist[i] + "-track wraparound jump is counted.", tx, y + 2);
                         break;
                     }
                 }

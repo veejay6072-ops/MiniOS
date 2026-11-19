@@ -7,8 +7,6 @@ import java.util.List;
 
 /** Allocation logic for first, next, best, and worst fit. */
 public final class FragmentationEngine {
-    private static final int MAX_MEMORY = 1000;
-
     private int total;
     private boolean created;
     private int[] memory = new int[0];
@@ -89,8 +87,8 @@ public final class FragmentationEngine {
     }
 
     public FragmentationStep createMemory(int size) {
-        if (size < 1 || size > MAX_MEMORY) {
-            throw new IllegalArgumentException("Memory size must be between 1 and " + MAX_MEMORY + " KB.");
+        if (size < 1) {
+            throw new IllegalArgumentException("Memory size must be at least 1 KB.");
         }
         FragmentationStep step = newStep("CREATE", "Memory of " + size + " KB");
         total = size;

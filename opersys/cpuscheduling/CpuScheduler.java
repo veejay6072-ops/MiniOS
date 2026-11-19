@@ -8,7 +8,7 @@ import java.util.Deque;
 import java.util.List;
 
 /**
- * The CPU scheduling LOGIC only: FCFS, SJF, Priority (non-preemptive) and Round Robin.
+ * The CPU scheduling LOGIC only: FCFS, SJF, Priority, SRTF, Preemptive Priority and Round Robin.
  * Nothing in this file knows about Swing, so it can be tested or reused without any GUI.
  * The GUI (CpuSchedulingDesign) just calls {@link #run} and draws the {@link Result}.
  */
@@ -20,6 +20,8 @@ public final class CpuScheduler {
         FCFS("FCFS"),
         SJF("SJF"),
         PRIORITY("Priority"),
+        PREEMPTIVE_SJF("SRTF"),
+        PREEMPTIVE_PRIORITY("Preemptive Priority"),
         ROUND_ROBIN("Round Robin");
 
         private final String label;
@@ -157,6 +159,8 @@ public final class CpuScheduler {
 
         List<Slice> raw = new ArrayList<>();
         if (algorithm == Algorithm.ROUND_ROBIN) roundRobin(work, quantum, raw);
+        else if (algorithm == Algorithm.PREEMPTIVE_SJF || algorithm == Algorithm.PREEMPTIVE_PRIORITY)
+            preemptive(work, algorithm, raw);
         else nonPreemptive(work, algorithm, raw);
         List<Slice> slices = merge(raw);
 
@@ -206,13 +210,55 @@ public final class CpuScheduler {
 
     private static boolean better(Work a, Work b, Algorithm algo) {
         if (algo == Algorithm.SJF) {
+            // SJF: choose the ready process with the shortest full burst.
             return a.job.burst != b.job.burst ? a.job.burst < b.job.burst : a.job.arrival < b.job.arrival;
         }
-        if (algo == Algorithm.PRIORITY) {
+        if (algo == Algorithm.PRIORITY || algo == Algorithm.PREEMPTIVE_PRIORITY) {
+            // Priority: the smaller priority number wins; arrival time breaks ties.
             return a.job.priority != b.job.priority ? a.job.priority < b.job.priority
                     : a.job.arrival < b.job.arrival;
         }
-        return a.job.arrival < b.job.arrival;   // FCFS
+        // FCFS: among ready processes, the earliest arrival is selected.
+        return a.job.arrival < b.job.arrival;
+    }
+
+    /** SRTF and Preemptive Priority: reselect the best ready process at each time unit. */
+    private static void preemptive(List<Work> all, Algorithm algo, List<Slice> out) {
+        int time = 0;
+        int done = 0;
+        while (done < all.size()) {
+            Work chosen = null;
+            for (Work w : all) {
+                if (w.remaining <= 0 || w.job.arrival > time) continue;
+                if (chosen == null || betterPreemptive(w, chosen, algo)) chosen = w;
+            }
+
+            if (chosen == null) {
+                int nextArrival = Integer.MAX_VALUE;
+                for (Work w : all) {
+                    if (w.remaining > 0) nextArrival = Math.min(nextArrival, w.job.arrival);
+                }
+                addSlice(out, Slice.IDLE, time, nextArrival);
+                time = nextArrival;
+                continue;
+            }
+
+            if (chosen.start < 0) chosen.start = time;
+            addSlice(out, chosen.job.name, time, time + 1);
+            chosen.remaining--;
+            time++;
+            if (chosen.remaining == 0) {
+                chosen.finish = time;
+                done++;
+            }
+        }
+    }
+
+    private static boolean betterPreemptive(Work a, Work b, Algorithm algo) {
+        if (algo == Algorithm.PREEMPTIVE_SJF) {
+            return a.remaining != b.remaining ? a.remaining < b.remaining : a.job.arrival < b.job.arrival;
+        }
+        return better(a, b, algo);
     }
 
     /** Round Robin: each process gets at most one quantum, then goes to the back of the queue. */

@@ -33,7 +33,9 @@ Supported algorithms:
 
 - FCFS - First Come, First Served
 - SJF - Shortest Job First
-- Priority
+- Priority (non-preemptive)
+- SRTF (preemptive SJF)
+- Preemptive Priority
 - Round Robin
 
 Formulas:
@@ -140,6 +142,7 @@ Supported algorithms:
 - SCAN
 - C-SCAN
 - LOOK
+- C-LOOK
 
 The app shows each stop and calculates total head movement
 
