@@ -1,14 +1,14 @@
 package opersys.multiprogramming;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * MULTIPROGRAMMING MODEL = the middleman between the screen and the simulation. LOGIC ONLY, no Swing here.
  *
- * The screen only has text boxes, so everything arrives as text ("A:200:5", "800", "2"...).
+ * The screen only has text boxes, so everything arrives as text ("A 200 5", "800", "2"...).
  * This class turns that text into real numbers (complaining nicely if something is wrong),
  * runs the simulation, and packs the answer into a Result for the controller.
  */
@@ -63,22 +63,47 @@ public final class MultiprogrammingModel {
         return run;
     }
 
-    /** Parses "A:200:5, B:300:3" into a list of jobs. */
+    /**
+     * Parses jobs typed the easy way: "A 200 5, B 300 3" (name, memory, burst).
+     * Jobs are separated by a comma, semicolon or new line. Inside a job, a space is enough
+     * (the old "A:200:5" still works too). The name is optional: "200 5, 300 3" gives jobs A and B.
+     */
     public static List<JobInput> parseJobs(String text) {
         List<JobInput> out = new ArrayList<>();
         String t = text == null ? "" : text.trim();
-        if (t.isEmpty()) throw new IllegalArgumentException("Type the jobs first, e.g. A:200:5, B:300:3");
-        for (String token : t.split("\\s*,\\s*")) {
-            String[] parts = token.trim().split("\\s*:\\s*");
-            if (parts.length != 3 || parts[0].isEmpty())
-                throw new IllegalArgumentException("Use name:memory:burst, e.g. A:200:5");
-            int mem = parseWhole(parts[1], "Memory of " + parts[0]);
-            int burst = parseWhole(parts[2], "Burst of " + parts[0]);
-            if (mem <= 0) throw new IllegalArgumentException("Job " + parts[0] + ": memory must be greater than 0.");
-            if (burst <= 0) throw new IllegalArgumentException("Job " + parts[0] + ": burst must be greater than 0.");
-            out.add(new JobInput(parts[0], mem, burst));
+        if (t.isEmpty()) throw new IllegalArgumentException("Add at least one process first (name, memory, burst).");
+        for (String token : t.split("\\s*[,;\\n]+\\s*")) {
+            token = token.trim();
+            if (token.isEmpty()) continue;
+            String[] parts = token.split("[\\s:]+");
+            String name;
+            String memText;
+            String burstText;
+            if (parts.length == 3) {
+                name = parts[0];
+                memText = parts[1];
+                burstText = parts[2];
+            } else if (parts.length == 2 && parts[0].matches("\\d+")) {
+                name = autoName(out.size());
+                memText = parts[0];
+                burstText = parts[1];
+            } else {
+                throw new IllegalArgumentException("Use name memory burst, e.g. A 200 5");
+            }
+            int mem = parseWhole(memText, "Memory of " + name);
+            int burst = parseWhole(burstText, "Burst of " + name);
+            if (mem <= 0) throw new IllegalArgumentException("Job " + name + ": memory must be greater than 0.");
+            if (burst <= 0) throw new IllegalArgumentException("Job " + name + ": burst must be greater than 0.");
+            out.add(new JobInput(name, mem, burst));
         }
+        if (out.isEmpty()) throw new IllegalArgumentException("Add at least one process first (name, memory, burst).");
         return out;
+    }
+
+    /** A, B, C ... Z, then A1, B1 ... for jobs typed without a name. */
+    private static String autoName(int index) {
+        String letter = String.valueOf((char) ('A' + index % 26));
+        return index < 26 ? letter : letter + (index / 26);
     }
 
     /** Parses a whole number from text, throwing a friendly error. */

@@ -1,15 +1,13 @@
 package opersys.multiprogramming;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.*;
 import opersys.core.UiKit;
 import opersys.multiprogramming.MultiprogrammingEngine.Job;
 import opersys.multiprogramming.MultiprogrammingEngine.Snap;
@@ -52,7 +50,13 @@ public class MultiprogrammingDesign extends JPanel {
     private static final int L_QUEUE = MultiprogrammingEngine.L_QUEUE;
 
     // ---------- screen parts ----------
-    private final JTextField jobsField = plainField("e.g.  A:200:5, B:300:3, C:500:4");
+    // the "Add a process" form: three boxes and an Add button; added processes show as chips
+    private final JTextField nameField = miniField("A", 64);
+    private final JTextField entryMemField = miniField("200", 64);
+    private final JTextField entryBurstField = miniField("5", 56);
+    private final FlatButton addBtn = new FlatButton("Add", false);
+    private final JPanel chipRow = new JPanel();
+    private final List<String[]> addedJobs = new ArrayList<>();   // each one: {name, memory, burst}
     private final JTextField memoryField = miniField("800", 52);
     private final JTextField quantumField = miniField("2", 40);
 
@@ -131,7 +135,12 @@ public class MultiprogrammingDesign extends JPanel {
 
     /** The jobs text the user typed. */
     public String getJobsText() {
-        return jobsField.getText();
+        StringBuilder text = new StringBuilder();
+        for (String[] job : addedJobs) {
+            if (text.length() > 0) text.append(", ");
+            text.append(job[0]).append(' ').append(job[1]).append(' ').append(job[2]);
+        }
+        return text.toString();
     }
 
     /** The total memory text. */
@@ -178,15 +187,6 @@ public class MultiprogrammingDesign extends JPanel {
         left.add(Box.createHorizontalStrut(4));
         left.add(title);
 
-        FieldBox jobsBox = new FieldBox(jobsField);
-        JPanel mid = new JPanel(new GridBagLayout());
-        mid.setOpaque(false);
-        GridBagConstraints c = new GridBagConstraints();
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 1;
-        c.insets = new Insets(0, 16, 0, 16);
-        mid.add(jobsBox, c);
-
         Box right = Box.createHorizontalBox();
         right.add(smallLabel("Memory"));
         right.add(Box.createHorizontalStrut(8));
@@ -202,9 +202,137 @@ public class MultiprogrammingDesign extends JPanel {
         bar.setOpaque(false);
         bar.setBorder(BorderFactory.createEmptyBorder(10, 6, 6, 16));
         bar.add(left, BorderLayout.WEST);
-        bar.add(mid, BorderLayout.CENTER);
         bar.add(right, BorderLayout.EAST);
-        return bar;
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(bar, BorderLayout.NORTH);
+        top.add(buildEntryRow(), BorderLayout.CENTER);
+        return top;
+    }
+
+    /** The "Add a process" row: Name, Memory, Burst, an Add button, and the processes added so far. */
+    private JComponent buildEntryRow() {
+        JLabel title = smallLabel("Add a process");
+        title.setFont(ui(Font.BOLD, 12));
+        title.setForeground(TEXT);
+
+        Box form = Box.createHorizontalBox();
+        form.add(title);
+        form.add(Box.createHorizontalStrut(12));
+        form.add(smallLabel("Name"));
+        form.add(Box.createHorizontalStrut(6));
+        form.add(nameField);
+        form.add(Box.createHorizontalStrut(12));
+        form.add(smallLabel("Memory"));
+        form.add(Box.createHorizontalStrut(6));
+        form.add(entryMemField);
+        form.add(Box.createHorizontalStrut(4));
+        form.add(smallLabel("KB"));
+        form.add(Box.createHorizontalStrut(12));
+        form.add(smallLabel("Burst"));
+        form.add(Box.createHorizontalStrut(6));
+        form.add(entryBurstField);
+        form.add(Box.createHorizontalStrut(12));
+        addBtn.setAlignmentY(0.5f);
+        form.add(addBtn);
+
+        // Enter moves to the next box, and Enter in the last one adds the process
+        nameField.addActionListener(e -> entryMemField.requestFocusInWindow());
+        entryMemField.addActionListener(e -> entryBurstField.requestFocusInWindow());
+        entryBurstField.addActionListener(e -> addJob());
+        addBtn.addActionListener(e -> addJob());
+
+        chipRow.setLayout(new BoxLayout(chipRow, BoxLayout.X_AXIS));
+        chipRow.setOpaque(false);
+        JScrollPane chips = new JScrollPane(chipRow, ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        chips.setBorder(null);
+        chips.setOpaque(false);
+        chips.getViewport().setOpaque(false);
+        chips.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 8));
+        refreshChips();
+
+        EntryCard card = new EntryCard();
+        card.setLayout(new BorderLayout(0, 4));
+        card.setBorder(BorderFactory.createEmptyBorder(8, 14, 6, 10));
+        chips.setPreferredSize(new Dimension(100, 34));
+        JPanel formRow = new JPanel(new BorderLayout());
+        formRow.setOpaque(false);
+        formRow.add(form, BorderLayout.WEST);
+        card.add(formRow, BorderLayout.NORTH);
+        card.add(chips, BorderLayout.CENTER);
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(false);
+        wrap.setBorder(BorderFactory.createEmptyBorder(0, 12, 8, 16));
+        wrap.add(card, BorderLayout.CENTER);
+        return wrap;
+    }
+
+    /** Checks the three boxes and adds the process. Returns false (after showing why) if something is wrong. */
+    private boolean addJob() {
+        String name = nameField.getText().trim();
+        if (name.isEmpty()) name = nextJobName();
+        int mem;
+        int burst;
+        try {
+            if (name.matches(".*[\\s,;:].*"))
+                throw new IllegalArgumentException("The name can't have spaces, commas or colons.");
+            for (String[] job : addedJobs) {
+                if (job[0].equalsIgnoreCase(name))
+                    throw new IllegalArgumentException("There is already a process named " + name + ".");
+            }
+            mem = MultiprogrammingModel.parseWhole(entryMemField.getText(), "Memory of " + name);
+            burst = MultiprogrammingModel.parseWhole(entryBurstField.getText(), "Burst of " + name);
+            if (mem <= 0) throw new IllegalArgumentException("Process " + name + ": memory must be greater than 0.");
+            if (burst <= 0) throw new IllegalArgumentException("Process " + name + ": burst must be greater than 0.");
+        } catch (IllegalArgumentException ex) {
+            showError(ex.getMessage());
+            return false;
+        }
+        addedJobs.add(new String[]{name, String.valueOf(mem), String.valueOf(burst)});
+        nameField.setText("");
+        entryMemField.setText("");
+        entryBurstField.setText("");
+        refreshChips();
+        nameField.requestFocusInWindow();
+        return true;
+    }
+
+    /** Something typed in the boxes that was not added yet. */
+    private boolean hasPendingEntry() {
+        return !nameField.getText().trim().isEmpty() || !entryMemField.getText().trim().isEmpty()
+                || !entryBurstField.getText().trim().isEmpty();
+    }
+
+    /** First free letter (A, B, C ...) for a process that was added without a name. */
+    private String nextJobName() {
+        for (int i = 0; ; i++) {
+            String candidate = String.valueOf((char) ('A' + i % 26)) + (i < 26 ? "" : String.valueOf(i / 26));
+            boolean used = false;
+            for (String[] job : addedJobs) used |= job[0].equalsIgnoreCase(candidate);
+            if (!used) return candidate;
+        }
+    }
+
+    private void refreshChips() {
+        chipRow.removeAll();
+        if (addedJobs.isEmpty()) {
+            chipRow.add(smallLabel("No processes added yet"));
+        }
+        for (int i = 0; i < addedJobs.size(); i++) {
+            chipRow.add(new JobChip(i, addedJobs.get(i)));
+            chipRow.add(Box.createHorizontalStrut(6));
+        }
+        chipRow.add(Box.createHorizontalGlue());
+        chipRow.revalidate();
+        chipRow.repaint();
+    }
+
+    private void removeJob(int index) {
+        if (index >= 0 && index < addedJobs.size()) addedJobs.remove(index);
+        refreshChips();
     }
 
     private JComponent buildBody() {
@@ -418,6 +546,7 @@ public class MultiprogrammingDesign extends JPanel {
             timer.start();
             updateButtons();
         } else {
+            if (hasPendingEntry() && !addJob()) return;   // whatever is typed in the boxes counts too
             if (controller != null) {
                 // delegate to the controller so the model validates the input
                 try {
@@ -439,7 +568,11 @@ public class MultiprogrammingDesign extends JPanel {
         paused = false;
         run = null;
         cur = 0;
-        jobsField.setText("");
+        addedJobs.clear();
+        nameField.setText("");
+        entryMemField.setText("");
+        entryBurstField.setText("");
+        refreshChips();
         memoryField.setText("");
         quantumField.setText("");
         rebuildSteps();
@@ -533,7 +666,7 @@ public class MultiprogrammingDesign extends JPanel {
         stepCards.clear();
         stepsList.setLayout(new BoxLayout(stepsList, BoxLayout.Y_AXIS));
         if (run == null) {
-            JLabel none = new JLabel("Nothing to show yet. Type some jobs on the Processes screen and press Simulate.");
+            JLabel none = new JLabel("Nothing to show yet. Add some processes on the Processes screen and press Simulate.");
             none.setFont(ui(Font.PLAIN, 13));
             none.setForeground(MUTED);
             none.setBorder(BorderFactory.createEmptyBorder(16, 8, 0, 0));
@@ -796,16 +929,6 @@ public class MultiprogrammingDesign extends JPanel {
         }
     }
 
-    private static JTextField plainField(String hint) {
-        JTextField f = new HintField(hint, false);
-        f.setBorder(null);
-        f.setOpaque(false);
-        f.setFont(ui(Font.PLAIN, 13));
-        f.setForeground(TEXT);
-        f.setCaretColor(TEXT);
-        return f;
-    }
-
     private static JTextField miniField(String hint, int width) {
         JTextField f = new HintField(hint, true);
         f.setFont(ui(Font.PLAIN, 13));
@@ -933,66 +1056,116 @@ public class MultiprogrammingDesign extends JPanel {
     }
 
     /** The search-box style field at the top: magnifier, a label, and the text the user types. */
-    private static class FieldBox extends JPanel {
-        private boolean focused;
-
-        FieldBox(JTextField field) {
-            super(new BorderLayout(8, 0));
+    /** White rounded card that holds the "Add a process" row. */
+    private static class EntryCard extends JPanel {
+        EntryCard() {
             setOpaque(false);
-            setBorder(BorderFactory.createEmptyBorder(0, 12, 2, 8));
-            JComponent icon = new JComponent() {
-                @Override
-                protected void paintComponent(Graphics g) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    smooth(g2);
-                    g2.setColor(MUTED);
-                    g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                    int cx = getWidth() / 2 - 1;
-                    int cy = getHeight() / 2 - 1;
-                    g2.drawOval(cx - 5, cy - 5, 9, 9);
-                    g2.drawLine(cx + 3, cy + 3, cx + 7, cy + 7);
-                    g2.dispose();
-                }
-            };
-            icon.setPreferredSize(new Dimension(16, 16));
-            JLabel hint = new JLabel("Jobs (name:KB:burst)");
-            hint.setFont(ui(Font.PLAIN, 12));
-            hint.setForeground(MUTED);
-            JPanel inner = new JPanel(new BorderLayout(8, 0));
-            inner.setOpaque(false);
-            inner.add(hint, BorderLayout.WEST);
-            inner.add(field, BorderLayout.CENTER);
-            add(icon, BorderLayout.WEST);
-            add(inner, BorderLayout.CENTER);
-            field.addFocusListener(new FocusAdapter() {
-                @Override
-                public void focusGained(FocusEvent e) {
-                    focused = true;
-                    repaint();
-                }
-
-                @Override
-                public void focusLost(FocusEvent e) {
-                    focused = false;
-                    repaint();
-                }
-            });
-            setPreferredSize(new Dimension(200, 36));
+            setPreferredSize(new Dimension(200, 92));
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             smooth(g2);
-            int w = getWidth();
-            int h = getHeight();
             g2.setColor(Color.WHITE);
-            g2.fillRoundRect(0, 0, w - 1, h - 1, 8, 8);
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
             g2.setColor(new Color(212, 212, 212));
-            g2.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
-            g2.setColor(focused ? ACCENT : new Color(0, 95, 184, 140));
-            g2.setStroke(new BasicStroke(2f));
-            g2.drawLine(4, h - 1, w - 5, h - 1);
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
+            g2.dispose();
+        }
+    }
+
+    /** One added process: a colored dot, "A  200 KB · burst 5", and a small x to remove it. */
+    private final class JobChip extends JPanel {
+        JobChip(int index, String[] job) {
+            setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(4, 9, 4, 6));
+            final Color color = PALETTE[index % PALETTE.length];
+            JComponent dot = new JComponent() {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    smooth(g2);
+                    g2.setColor(color);
+                    g2.fillOval(0, (getHeight() - 10) / 2, 10, 10);
+                    g2.dispose();
+                }
+            };
+            Dimension dotSize = new Dimension(10, 14);
+            dot.setPreferredSize(dotSize);
+            dot.setMinimumSize(dotSize);
+            dot.setMaximumSize(dotSize);
+            dot.setAlignmentY(0.5f);
+            JLabel text = new JLabel(job[0] + "   " + job[1] + " KB · burst " + job[2]);
+            text.setFont(ui(Font.PLAIN, 12));
+            text.setForeground(TEXT);
+            text.setAlignmentY(0.5f);
+            CloseButton close = new CloseButton(() -> removeJob(index));
+            close.setAlignmentY(0.5f);
+            add(dot);
+            add(Box.createHorizontalStrut(6));
+            add(text);
+            add(Box.createHorizontalStrut(8));
+            add(close);
+            setAlignmentY(0.5f);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            smooth(g2);
+            g2.setColor(new Color(244, 246, 250));
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 14, 14);
+            g2.setColor(new Color(214, 218, 226));
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 14, 14);
+            g2.dispose();
+        }
+    }
+
+    /** Small x that runs an action when clicked. */
+    private static class CloseButton extends JComponent {
+        private boolean hover;
+
+        CloseButton(Runnable onClick) {
+            Dimension size = new Dimension(14, 14);
+            setPreferredSize(size);
+            setMinimumSize(size);
+            setMaximumSize(size);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    onClick.run();
+                }
+
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    hover = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    hover = false;
+                    repaint();
+                }
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            smooth(g2);
+            g2.setColor(hover ? new Color(196, 43, 28) : MUTED);
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.drawLine(4, 4, getWidth() - 5, getHeight() - 5);
+            g2.drawLine(getWidth() - 5, 4, 4, getHeight() - 5);
             g2.dispose();
         }
     }
@@ -1287,7 +1460,7 @@ public class MultiprogrammingDesign extends JPanel {
                 drawCentered(g2, "No processes yet", w / 2, cy - 12);
                 g2.setColor(MUTED);
                 g2.setFont(ui(Font.PLAIN, 12));
-                drawCentered(g2, "Type the jobs above (name:KB:burst, e.g. A:200:5, B:300:3), the total memory and the quantum,",
+                drawCentered(g2, "Add your processes above (name, memory, burst), set the total memory and the quantum,",
                         w / 2, cy + 10);
                 drawCentered(g2, "then press Simulate.", w / 2, cy + 28);
                 g2.dispose();

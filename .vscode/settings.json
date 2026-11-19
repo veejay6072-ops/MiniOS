@@ -1,5 +1,6 @@
 {
-  "java.project.sourcePaths": [
-    "."
-  ]
+    "java.project.sourcePaths": ["."],
+    "code-runner.executorMap": {
+        "java": "cd $workspaceRoot && javac -encoding UTF-8 -d out_run -sourcepath . opersys/Main.java && java -cp \"out_run;.\" opersys.Main"
+    }
 }

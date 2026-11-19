@@ -19,7 +19,8 @@ A Java desktop-style learning app for operating system concepts.
 
 ## Run
 
-Open the project in VS Code, then run [Main.java] to open the desktop.
+Open the repository root in VS Code, then select **Run MiniOS** in Run and Debug.
+The entry point is `opersys.Main` because `Main.java` declares the `opersys` package.
 
 ## Simulator files
 
