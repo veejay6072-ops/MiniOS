@@ -1,3 +1,9 @@
+package opersys;
+
+
+
+
+  
 import javax.swing.*;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
@@ -14,7 +20,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  Entrypoint for the Virtual Desktop project. Compiles and launches the desktop.
@@ -69,7 +78,7 @@ public class Main {
 
     // ---------- compile ----------
 
-    /** Compiles VirtualDesktop and everything it uses (found through -sourcepath). */
+    /** Compiles the application sources into the directory used by the desktop class loader. */
     private static boolean compile(File root, File out) {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
         if (javac == null) {
@@ -78,12 +87,23 @@ public class Main {
         }
         DiagnosticCollector<JavaFileObject> problems = new DiagnosticCollector<>();
         try (StandardJavaFileManager files = javac.getStandardFileManager(problems, null, null)) {
+            List<File> sourceFiles = new ArrayList<>();
+            try (Stream<Path> paths = Files.walk(new File(root, "opersys").toPath())) {
+                paths.filter(Files::isRegularFile)
+                        .filter(path -> path.toString().endsWith(".java"))
+                        .map(Path::toFile)
+                        .forEach(sourceFiles::add);
+            }
+            if (sourceFiles.isEmpty()) {
+                fail("No Java source files found in the 'opersys' folder.");
+                return false;
+            }
             boolean ok = javac.getTask(null, files, problems,
                     Arrays.asList("-encoding", "UTF-8",
                             "-d", out.getPath(),
                             "-sourcepath", root.getPath()),
                     null,
-                    files.getJavaFileObjects(new File(root, "opersys/VirtualDesktop.java"))).call();
+                    files.getJavaFileObjectsFromFiles(sourceFiles)).call();
             if (ok) return true;
         } catch (IOException e) {
             fail("Compile failed: " + e);

@@ -6,7 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Page replacement LOGIC only: FIFO, LRU and Optimal (OPT).
+ * Page replacement LOGIC only: FIFO, LRU, OPT and LFU.
  * Nothing in this file knows about Swing. The GUI (PageReplacementDesign) calls {@link #run}
  * and draws the {@link Result}.
  */
@@ -18,7 +18,7 @@ public final class PageReplacement {
     public static final int EMPTY = -1;
 
     public enum Algorithm {
-        FIFO, LRU, OPT
+        FIFO, LRU, OPT, LFU
     }
 
     /** One page request and what the tabs looked like afterwards. */
@@ -78,8 +78,9 @@ public final class PageReplacement {
         }
 
         int[] slots = new int[frames];
-        int[] loadedAt = new int[frames];   // when each tab received its page (for FIFO)
-        int[] lastUsed = new int[frames];   // when each tab was last used (for LRU)
+        int[] loadedAt = new int[frames];   // when each tab received its page (FIFO, tie-break for LFU)
+        int[] lastUsed = new int[frames];   // when each tab was last used (LRU)
+        int[] freq = new int[frames];       // how many times each tab's page was used (LFU)
         Arrays.fill(slots, EMPTY);
 
         List<Step> steps = new ArrayList<>();
@@ -93,6 +94,7 @@ public final class PageReplacement {
             if (found >= 0) {   // HIT
                 hits++;
                 lastUsed[found] = i;
+                freq[found]++;
                 steps.add(new Step(i, page, true, copy(slots), -1, EMPTY,
                         "Page " + page + " was already open, so it is a hit."));
                 continue;
@@ -106,7 +108,7 @@ public final class PageReplacement {
             if (slot >= 0) {
                 message = "Page " + page + " was not open, so a page fault happened. It opened in an empty tab.";
             } else {
-                slot = chooseVictim(algorithm, slots, loadedAt, lastUsed, refs, i);
+                slot = chooseVictim(algorithm, slots, loadedAt, lastUsed, freq, refs, i);
                 victim = slots[slot];
                 message = "Page " + page + " was not open, so a page fault happened. "
                         + algorithm + " closed " + describe(algorithm) + ", Page " + victim + ".";
@@ -114,15 +116,16 @@ public final class PageReplacement {
             slots[slot] = page;
             loadedAt[slot] = i;
             lastUsed[slot] = i;
+            freq[slot] = 1;                 // a newly loaded page has been used once
             steps.add(new Step(i, page, false, copy(slots), slot, victim, message));
         }
 
         return new Result(algorithm, frames, Collections.unmodifiableList(steps), hits, faults);
     }
 
-    /** Picks the tab to close when every tab is full. */
+    /** Picks the tab to close when every tab is full (FIFO, LRU, LFU, OPT). */
     private static int chooseVictim(Algorithm algorithm, int[] slots, int[] loadedAt, int[] lastUsed,
-                                    int[] refs, int now) {
+                                    int[] freq, int[] refs, int now) {
         int best = 0;
         for (int s = 1; s < slots.length; s++) {
             switch (algorithm) {
@@ -131,6 +134,9 @@ public final class PageReplacement {
                     break;
                 case LRU:
                     if (lastUsed[s] < lastUsed[best]) best = s;
+                    break;
+                case LFU:   // fewest uses; on a tie, the older page goes
+                    if (freq[s] < freq[best] || (freq[s] == freq[best] && loadedAt[s] < loadedAt[best])) best = s;
                     break;
                 default: // OPT: the page needed farthest in the future (or never again)
                     if (nextUse(refs, slots[s], now) > nextUse(refs, slots[best], now)) best = s;
@@ -153,6 +159,8 @@ public final class PageReplacement {
                 return "the oldest tab";
             case LRU:
                 return "the least recently used tab";
+            case LFU:
+                return "the least frequently used tab";
             default:
                 return "the tab that will not be needed for the longest time";
         }
