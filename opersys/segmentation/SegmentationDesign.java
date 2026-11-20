@@ -1,5 +1,6 @@
 package opersys.segmentation;
 
+import opersys.DecimalInput;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -186,7 +187,7 @@ public class SegmentationDesign extends JPanel {
 
     private void refresh() {
         mapTitle.setText("<html><b>Where the segments sit in memory</b> <font color='#8a8a8a'>("
-                + String.format("%,d", total) + " KB total)</font></html>");
+                + DecimalInput.format(total) + " KB total)</font></html>");
         tableView.revalidate();
         revalidate();
         repaint();
@@ -600,7 +601,7 @@ public class SegmentationDesign extends JPanel {
             g2.fillRoundRect(8, 30, (int) Math.round((w - 16) * Math.min(1.0, used / (double) total)), 7, 7, 7);
             g2.setFont(font(Font.PLAIN, 12));
             g2.setColor(MUTED);
-            g2.drawString(String.format("%,d of %,d KB used", used, total), 8, 58);
+            g2.drawString(DecimalInput.format(used) + " of " + DecimalInput.format(total) + " KB used", 8, 58);
             g2.dispose();
         }
     }
