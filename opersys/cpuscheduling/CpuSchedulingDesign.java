@@ -1,5 +1,6 @@
 package opersys.cpuscheduling;
 
+import opersys.DecimalInput;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -446,12 +447,6 @@ public class CpuSchedulingDesign extends JPanel {
         if (runListener != null) runListener.run();
     }
 
-    private static int readInt(JTextField field, String message) {
-        String text = field.getText().trim();
-        if (text.isEmpty()) throw new IllegalArgumentException(message);
-        return Integer.parseInt(text);
-    }
-
     private static JPanel labeled(String text, JComponent field) {
         JPanel p = new JPanel(new BorderLayout(0, 2));
         p.setOpaque(false);
@@ -543,7 +538,7 @@ public class CpuSchedulingDesign extends JPanel {
 
             onTextChange(burst, () -> {
                 String t = burst.getText().trim();
-                tile.setBurst(t.isEmpty() ? 0 : Integer.parseInt(t));
+                tile.setBurst(t.isEmpty() ? 0 : DecimalInput.parseDecimal(t, "Burst"));
             });
         }
 
@@ -585,7 +580,7 @@ public class CpuSchedulingDesign extends JPanel {
     /** The colored square with the process name and a small badge showing its burst time. */
     private static class Tile extends JComponent {
         private int index;
-        private int burst;
+        private double burst;
 
         Tile() {
             setPreferredSize(new Dimension(70, 62));
@@ -596,7 +591,7 @@ public class CpuSchedulingDesign extends JPanel {
             repaint();
         }
 
-        void setBurst(int b) {
+        void setBurst(double b) {
             burst = b;
             repaint();
         }
@@ -618,7 +613,7 @@ public class CpuSchedulingDesign extends JPanel {
             if (burst > 0) {
                 g2.setFont(font(Font.BOLD, 11));
                 FontMetrics bf = g2.getFontMetrics();
-                String text = String.valueOf(burst);
+                String text = DecimalInput.format(burst);
                 int bw = Math.max(18, bf.stringWidth(text) + 10);
                 int bh = 16;
                 int bx = w - bw - 5;
@@ -638,7 +633,7 @@ public class CpuSchedulingDesign extends JPanel {
     private static class Stage extends JPanel {
         private CpuScheduler.Result result;
         private final Map<String, Integer> order = new HashMap<>();
-        private final Map<String, Integer> bursts = new HashMap<>();
+        private final Map<String, Double> bursts = new HashMap<>();
         private double time;          // current position on the timeline, in time units
         private double speed = 2;     // time units per second
         private boolean playing;
@@ -758,14 +753,14 @@ public class CpuSchedulingDesign extends JPanel {
             return new Rectangle(24, getHeight() - 52, 36, 36);
         }
 
-        private int unitsLeft(CpuScheduler.Slice running) {
-            Integer burst = bursts.get(running.name);
+        private double unitsLeft(CpuScheduler.Slice running) {
+            Double burst = bursts.get(running.name);
             if (burst == null) return 0;
             double done = time - running.start;
             for (CpuScheduler.Slice s : result.slices) {
                 if (s.name.equals(running.name) && s.end <= running.start) done += s.length();
             }
-            return (int) Math.ceil(burst - done - 1e-9);
+            return Math.max(0, burst - done);
         }
 
         private static void drawSpaced(Graphics2D g2, String text, int cx, int baseline, float spacing) {
@@ -874,8 +869,8 @@ public class CpuSchedulingDesign extends JPanel {
                 g2.setFont(font(Font.PLAIN, 16));
                 g2.setColor(new Color(200, 200, 206));
             } else {
-                int left = unitsLeft(running);
-                message = left + (left == 1 ? " unit left" : " units left");
+                double left = unitsLeft(running);
+                message = DecimalInput.format(left) + (left == 1 ? " unit left" : " units left");
                 g2.setFont(font(Font.BOLD, 19));
                 g2.setColor(Color.WHITE);
             }
@@ -903,11 +898,12 @@ public class CpuSchedulingDesign extends JPanel {
             } else {
                 g2.fillPolygon(new int[]{pcx - 4, pcx - 4, pcx + 7}, new int[]{pcy - 8, pcy + 8, pcy}, 3);
             }
-            int total = result == null ? 0 : result.totalTime;
-            int shown = result == null ? 0 : (int) Math.floor(Math.min(time, total));
+            double total = result == null ? 0 : result.totalTime;
+            double shown = result == null ? 0 : Math.min(time, total);
             g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, 15));
             g2.setColor(result == null ? new Color(255, 255, 255, 110) : Color.WHITE);
-            g2.drawString(shown + " / " + total, pb.x + pb.width + 14, pcy + 5);
+            g2.drawString(DecimalInput.format(shown) + " / " + DecimalInput.format(total),
+                    pb.x + pb.width + 14, pcy + 5);
             g2.setFont(font(Font.PLAIN, 13));
             g2.setColor(new Color(255, 255, 255, 220));
             String caption = "Gantt timeline";
@@ -1027,13 +1023,15 @@ public class CpuSchedulingDesign extends JPanel {
         void showResult(CpuScheduler.Result r) {
             title.setFont(font(Font.BOLD, 22));
             title.setForeground(INK);
-            title.setText(r.algorithm.label() + (r.quantum > 0 ? " \u00b7 quantum " + r.quantum : ""));
+            title.setText(r.algorithm.label() + (r.quantum > 0
+                    ? " \u00b7 quantum " + DecimalInput.format(r.quantum) : ""));
             hint.setVisible(false);
             brandInfo.setText(r.rows.size() + (r.rows.size() == 1 ? " process" : " processes")
-                    + " \u00b7 finished in " + r.totalTime + (r.totalTime == 1 ? " unit" : " units"));
+                    + " \u00b7 finished in " + DecimalInput.format(r.totalTime)
+                    + (r.totalTime == 1 ? " unit" : " units"));
             brandRow.setVisible(true);
-            waiting.setValue(String.format("%.2f", r.averageWaiting));
-            turnaround.setValue(String.format("%.2f", r.averageTurnaround));
+            waiting.setValue(DecimalInput.format(r.averageWaiting));
+            turnaround.setValue(DecimalInput.format(r.averageTurnaround));
             chips.setVisible(true);
             revalidate();
             repaint();
@@ -1094,7 +1092,7 @@ public class CpuSchedulingDesign extends JPanel {
 
     // ---------- small styled controls ----------
 
-    /** Text box that only accepts digits, with a rounded gray background and a faint hint. */
+    /** Text box that accepts numeric input, with a rounded gray background and a faint hint. */
     private static class RoundField extends JTextField {
         private final String hint;
 
@@ -1153,12 +1151,12 @@ public class CpuSchedulingDesign extends JPanel {
         @Override
         public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs)
                 throws BadLocationException {
-            String s = text == null ? "" : text;
-            String digits = s.replaceAll("\\D", "");
-            int room = max - (fb.getDocument().getLength() - length);
-            if (digits.length() > room) digits = digits.substring(0, Math.max(0, room));
-            if (digits.isEmpty() && !s.isEmpty()) return;   // nothing usable was typed
-            super.replace(fb, offset, length, digits, attrs);
+            String current = fb.getDocument().getText(0, fb.getDocument().getLength());
+            String candidate = current.substring(0, offset) + (text == null ? "" : text)
+                    + current.substring(offset + length);
+            if (!candidate.matches("(\\d*(\\.\\d*)?|\\.\\d*)")) return;
+            if (candidate.replace(".", "").length() > max) return;
+            super.replace(fb, offset, length, text, attrs);
         }
     }
 

@@ -23,14 +23,14 @@ public final class MultiprogrammingEngine {
     public static final class Job {
         public final int index;
         public final String name;
-        public final int memory;
-        public final int burst;
-        public int remaining;
-        public int loadedAt = -1;
-        public int firstRun = -1;
-        public int finish = -1;
+        public final double memory;
+        public final double burst;
+        public double remaining;
+        public double loadedAt = -1;
+        public double firstRun = -1;
+        public double finish = -1;
 
-        Job(int index, String name, int memory, int burst) {
+        Job(int index, String name, double memory, double burst) {
             this.index = index;
             this.name = name;
             this.memory = memory;
@@ -40,21 +40,21 @@ public final class MultiprogrammingEngine {
     }
 
     public static final class Snap {
-        public int time;
+        public double time;
         public int running = -1;
-        public int used;
-        public int total;
+        public double used;
+        public double total;
         public int[] state;
         public int[] pos;
-        public int[] left;
-        public int[] doneAt;
+        public double[] left;
+        public double[] doneAt;
         public int[] memOrder;
     }
 
     public static final class Step {
         public int no;
-        public int start;
-        public int end;
+        public double start;
+        public double end;
         public int job = -1;
         public boolean last;
         public String title;
@@ -67,15 +67,15 @@ public final class MultiprogrammingEngine {
     }
 
     public static class Result {
-        public final int memory;
-        public final int quantum;
-        public final int total;
+        public final double memory;
+        public final double quantum;
+        public final double total;
         public final int maxDegree;
         public final List<Job> jobs;
         public final List<Step> steps;
         public final String summary;
 
-        Result(int memory, int quantum, int total, int maxDegree, List<Job> jobs,
+        Result(double memory, double quantum, double total, int maxDegree, List<Job> jobs,
                List<Step> steps, String summary) {
             this.memory = memory;
             this.quantum = quantum;
@@ -87,7 +87,7 @@ public final class MultiprogrammingEngine {
         }
     }
 
-    public static Result simulate(List<Job> jobs, int totalMemory, int quantum) {
+    public static Result simulate(List<Job> jobs, double totalMemory, double quantum) {
         for (Job job : jobs) {
             if (job.memory > totalMemory)
                 throw new IllegalArgumentException(job.name + " needs more memory than the system has.");
@@ -96,8 +96,8 @@ public final class MultiprogrammingEngine {
         List<Job> inMemory = new ArrayList<>();
         Deque<Job> ready = new ArrayDeque<>();
         List<Object[]> pendingLog = new ArrayList<>();
-        int[] used = {0};
-        int time = 0;
+        double[] used = {0};
+        double time = 0;
 
         admit(waiting, inMemory, ready, used, totalMemory, time, pendingLog);
         int maxDegree = inMemory.size();
@@ -121,7 +121,7 @@ public final class MultiprogrammingEngine {
             step.add(L_INFO, "Ready queue: " + names(queueNow)
                     + " - the CPU takes Job " + job.name + " from the front");
 
-            int slice = Math.min(quantum, job.remaining);
+            double slice = Math.min(quantum, job.remaining);
             step.add(L_RUN, "Job " + job.name + " runs from t=" + time + " to t=" + (time + slice)
                     + " (" + slice + (slice == 1 ? " unit" : " units") + ": the smaller of quantum "
                     + quantum + " and " + job.remaining + " left)");
@@ -163,8 +163,8 @@ public final class MultiprogrammingEngine {
         return new Result(totalMemory, quantum, time, maxDegree, jobs, steps, summary);
     }
 
-    private static void admit(List<Job> waiting, List<Job> inMemory, Deque<Job> ready, int[] used,
-                              int totalMemory, int time, List<Object[]> log) {
+    private static void admit(List<Job> waiting, List<Job> inMemory, Deque<Job> ready, double[] used,
+                              double totalMemory, double time, List<Object[]> log) {
         for (int i = 0; i < waiting.size();) {
             Job job = waiting.get(i);
             if (used[0] + job.memory <= totalMemory) {
@@ -181,8 +181,8 @@ public final class MultiprogrammingEngine {
         }
     }
 
-    private static Snap snapshot(List<Job> jobs, int time, Job running, Deque<Job> ready,
-                                 List<Job> inMemory, int used, int total) {
+    private static Snap snapshot(List<Job> jobs, double time, Job running, Deque<Job> ready,
+                                 List<Job> inMemory, double used, double total) {
         Snap snapshot = new Snap();
         snapshot.time = time;
         snapshot.used = used;
@@ -190,8 +190,8 @@ public final class MultiprogrammingEngine {
         snapshot.running = running == null ? -1 : running.index;
         snapshot.state = new int[jobs.size()];
         snapshot.pos = new int[jobs.size()];
-        snapshot.left = new int[jobs.size()];
-        snapshot.doneAt = new int[jobs.size()];
+        snapshot.left = new double[jobs.size()];
+        snapshot.doneAt = new double[jobs.size()];
         int position = 1;
         for (Job job : ready) snapshot.pos[job.index] = position++;
         for (Job job : jobs) {

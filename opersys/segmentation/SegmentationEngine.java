@@ -21,10 +21,10 @@ public final class SegmentationEngine {
     /** One segment: a name, a base address and a limit (size). */
     public static final class Segment {
         public final String name;
-        public final int base;
-        public final int limit;
+        public final double base;
+        public final double limit;
 
-        public Segment(String name, int base, int limit) {
+        public Segment(String name, double base, double limit) {
             this.name = name;
             this.base = base;
             this.limit = limit;
@@ -42,12 +42,12 @@ public final class SegmentationEngine {
 
         public final int kind;
         public final int seg;
-        public final int offset;
-        public final int limit;
-        public final int base;
-        public final int physical;
+        public final double offset;
+        public final double limit;
+        public final double base;
+        public final double physical;
 
-        private Result(int kind, int seg, int offset, int limit, int base, int physical) {
+        private Result(int kind, int seg, double offset, double limit, double base, double physical) {
             this.kind = kind;
             this.seg = seg;
             this.offset = offset;
@@ -56,15 +56,15 @@ public final class SegmentationEngine {
             this.physical = physical;
         }
 
-        public static Result ok(int seg, int offset, int limit, int base, int physical) {
+        public static Result ok(int seg, double offset, double limit, double base, double physical) {
             return new Result(OK, seg, offset, limit, base, physical);
         }
 
-        public static Result fault(int seg, int offset, int limit, int base) {
+        public static Result fault(int seg, double offset, double limit, double base) {
             return new Result(FAULT, seg, offset, limit, base, -1);
         }
 
-        public static Result noSegment(int seg, int offset) {
+        public static Result noSegment(int seg, double offset) {
             return new Result(NO_SEGMENT, seg, offset, -1, -1, -1);
         }
 
@@ -108,17 +108,17 @@ public final class SegmentationEngine {
     }
 
     /** The highest physical address touched by any segment, rounded up to the next 1 KB. */
-    public int total() {
-        int end = 4000;
+    public double total() {
+        double end = 4000;
         for (Segment s : segments) {
             end = Math.max(end, s.base + s.limit);
         }
-        return (int) (Math.ceil(end / 1000.0) * 1000);
+        return Math.ceil(end / 1000.0) * 1000;
     }
 
     /** Sum of all segment limits (the amount of memory in use). */
-    public int used() {
-        int sum = 0;
+    public double used() {
+        double sum = 0;
         for (Segment s : segments) {
             sum += s.limit;
         }
@@ -132,7 +132,7 @@ public final class SegmentationEngine {
      * @param offset offset inside the segment
      * @return the translation result (never null)
      */
-    public Result translate(int seg, int offset) {
+    public Result translate(int seg, double offset) {
         if (seg < 0 || seg >= segments.size()) {
             return Result.noSegment(seg, offset);
         }

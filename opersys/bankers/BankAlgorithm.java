@@ -7,11 +7,11 @@ import java.util.List;
 public class BankAlgorithm {
     private final int processCount;    
     private final int resourceCount;  
-    private final int[] available;     
-    private final int[][] max;         
-    private final int[][] allocation;  
+    private final double[] available;
+    private final double[][] max;
+    private final double[][] allocation;
 
-    public BankAlgorithm(int[] available, int[][] max, int[][] allocation) {
+    public BankAlgorithm(double[] available, double[][] max, double[][] allocation) {
         this.processCount = max.length;
         this.resourceCount = available.length;
         this.available = available.clone();
@@ -23,12 +23,18 @@ public class BankAlgorithm {
     private void validate() {
         if (allocation.length != processCount)
             throw new IllegalArgumentException("Allocation must have " + processCount + " rows (one per process).");
+        for (double value : available) {
+            if (value < 0) throw new IllegalArgumentException("Available resources cannot be negative.");
+        }
         for (int p = 0; p < processCount; p++) {
             if (max[p].length != resourceCount || allocation[p].length != resourceCount)
                 throw new IllegalArgumentException("Every row must have " + resourceCount + " values.");
-            for (int r = 0; r < resourceCount; r++)
-                if (allocation[p][r] > max[p][r])
+            for (int r = 0; r < resourceCount; r++) {
+                if (max[p][r] < 0 || allocation[p][r] < 0)
+                    throw new IllegalArgumentException("Resource amounts cannot be negative.");
+                if (allocation[p][r] - max[p][r] > 1e-9)
                     throw new IllegalArgumentException("P" + p + " allocation is larger than its max.");
+            }
         }
     }
 
@@ -36,23 +42,23 @@ public class BankAlgorithm {
         return processCount;
     }
 
-    public int[] getAvailable() {
+    public double[] getAvailable() {
         return available.clone();
     }
 
-    public int need(int p, int r) {
+    public double need(int p, int r) {
         return max[p][r] - allocation[p][r];
     }
 
-    public int[] getNeed(int p) {
-        int[] row = new int[resourceCount];
+    public double[] getNeed(int p) {
+        double[] row = new double[resourceCount];
         for (int r = 0; r < resourceCount; r++) row[r] = need(p, r);
         return row;
     }
 
  
     public List<Integer> findSafeSequence() {
-        int[] work = available.clone();
+        double[] work = available.clone();
         boolean[] finished = new boolean[processCount];
         List<Integer> sequence = new ArrayList<>();
         boolean progress = true;
@@ -77,7 +83,7 @@ public class BankAlgorithm {
      * so the screen can show the thinking step by step. It changes nothing in the bank.
      */
     public List<BankStep> trace() {
-        int[] work = available.clone();
+        double[] work = available.clone();
         boolean[] finished = new boolean[processCount];
         List<BankStep> steps = new ArrayList<>();
         boolean progress = true;
@@ -88,7 +94,7 @@ public class BankAlgorithm {
             round++;   // a new pass over the customers
             for (int p = 0; p < processCount; p++) {
                 if (finished[p]) continue;
-                int[] before = work.clone();
+                double[] before = work.clone();
                 if (canFinish(p, work)) {
                     for (int r = 0; r < resourceCount; r++) work[r] += allocation[p][r];
                     finished[p] = true;
@@ -103,9 +109,9 @@ public class BankAlgorithm {
     }
 
     /** True if the pile ("work") covers everything this customer may still need. */
-    private boolean canFinish(int p, int[] work) {
+    private boolean canFinish(int p, double[] work) {
         for (int r = 0; r < resourceCount; r++)
-            if (need(p, r) > work[r]) return false;
+            if (need(p, r) - work[r] > 1e-9) return false;
         return true;
     }
 
@@ -114,14 +120,16 @@ public class BankAlgorithm {
      * (2) the bank actually has it, and (3) the bank would STILL be safe afterwards.
      * We try the loan first, and if it turns out unsafe we undo it and say no.
      */
-    public boolean request(int p, int[] req) {
+    public boolean request(int p, double[] req) {
         if (p < 0 || p >= processCount) throw new IllegalArgumentException("There is no process P" + p + ".");
         if (req.length != resourceCount) throw new IllegalArgumentException("Request must have " + resourceCount + " values.");
-        for (int r = 0; r < resourceCount; r++)
-            if (req[r] > need(p, r))
+        for (int r = 0; r < resourceCount; r++) {
+            if (req[r] < 0) throw new IllegalArgumentException("Requested resources cannot be negative.");
+            if (req[r] - need(p, r) > 1e-9)
                 throw new IllegalStateException("P" + p + " requests more than its declared need.");
+        }
         for (int r = 0; r < resourceCount; r++)
-            if (req[r] > available[r]) return false;   // the bank simply doesn't have enough right now
+            if (req[r] - available[r] > 1e-9) return false;   // the bank simply doesn't have enough right now
 
         // pretend we lend it...
         for (int r = 0; r < resourceCount; r++) {

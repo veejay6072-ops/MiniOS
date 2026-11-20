@@ -33,9 +33,9 @@ public class DeadlockApp extends JPanel {
 
     private BankAlgorithm load() {
         return new BankAlgorithm(
-                UiKit.ints(availableField.getText()),
-                UiKit.matrix(maxField.getText()),
-                UiKit.matrix(allocField.getText()));
+                UiKit.doubles(availableField.getText()),
+                UiKit.doubleMatrix(maxField.getText()),
+                UiKit.doubleMatrix(allocField.getText()));
     }
 
     private void checkSafety() {
@@ -58,7 +58,7 @@ public class DeadlockApp extends JPanel {
         try {
             BankAlgorithm bank = load();
             int p = Integer.parseInt(reqProcessField.getText().trim());
-            int[] req = UiKit.ints(reqVectorField.getText());
+            double[] req = UiKit.doubles(reqVectorField.getText());
 
             StringBuilder sb = new StringBuilder();
             sb.append("Request from P").append(p).append(": ").append(Arrays.toString(req)).append("\n");

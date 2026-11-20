@@ -1,5 +1,6 @@
 package opersys.multiprogramming;
 
+import opersys.DecimalInput;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -16,10 +17,10 @@ public final class MultiprogrammingModel {
     /** One job the user typed: name, memory (KB) and burst (time units). */
     public static final class JobInput {
         public final String name;
-        public final int memory;
-        public final int burst;
+        public final double memory;
+        public final double burst;
 
-        JobInput(String name, int memory, int burst) {
+        JobInput(String name, double memory, double burst) {
             this.name = name;
             this.memory = memory;
             this.burst = burst;
@@ -40,8 +41,8 @@ public final class MultiprogrammingModel {
     /** Reads the text fields, validates them, and returns a simulation result. */
     public static Run build(String jobsText, String memoryText, String quantumText) {
         List<JobInput> inputs = parseJobs(jobsText);
-        int totalMemory = parseWhole(memoryText, "Total memory");
-        int quantum = parseWhole(quantumText, "Quantum");
+        double totalMemory = parseDecimal(memoryText, "Total memory");
+        double quantum = parseDecimal(quantumText, "Quantum");
         if (totalMemory <= 0) throw new IllegalArgumentException("Total memory must be greater than 0.");
         if (quantum <= 0) throw new IllegalArgumentException("Quantum must be greater than 0.");
         for (JobInput j : inputs) {
@@ -79,15 +80,15 @@ public final class MultiprogrammingModel {
                 name = parts[0];
                 memText = parts[1];
                 burstText = parts[2];
-            } else if (parts.length == 2 && parts[0].matches("\\d+")) {
+            } else if (parts.length == 2 && parts[0].matches("(\\d+(\\.\\d*)?|\\.\\d+)")) {
                 name = autoName(out.size());
                 memText = parts[0];
                 burstText = parts[1];
             } else {
                 throw new IllegalArgumentException("Use name memory burst, e.g. A 200 5");
             }
-            int mem = parseWhole(memText, "Memory of " + name);
-            int burst = parseWhole(burstText, "Burst of " + name);
+            double mem = parseDecimal(memText, "Memory of " + name);
+            double burst = parseDecimal(burstText, "Burst of " + name);
             if (mem <= 0) throw new IllegalArgumentException("Job " + name + ": memory must be greater than 0.");
             if (burst <= 0) throw new IllegalArgumentException("Job " + name + ": burst must be greater than 0.");
             out.add(new JobInput(name, mem, burst));
@@ -102,12 +103,8 @@ public final class MultiprogrammingModel {
         return index < 26 ? letter : letter + (index / 26);
     }
 
-    /** Parses a whole number from text, throwing a friendly error. */
-    public static int parseWhole(String text, String what) {
-        try {
-            return Integer.parseInt(text.trim());
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(what + " must be a whole number.");
-        }
+    /** Parses a finite decimal quantity from text, throwing a friendly error. */
+    public static double parseDecimal(String text, String what) {
+        return DecimalInput.parseDecimal(text, what);
     }
 }

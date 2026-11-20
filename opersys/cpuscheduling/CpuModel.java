@@ -1,5 +1,6 @@
 package opersys.cpuscheduling;
 
+import opersys.DecimalInput;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,15 +19,15 @@ public final class CpuModel {
     /** What came out of a simulation: the algorithm, the Gantt chart, the per-process numbers. */
     public static final class Result {
         private final CpuScheduler.Algorithm algorithm;
-        private final int quantum;
+        private final double quantum;
         private final List<CpuScheduler.Slice> slices;
         private final List<CpuScheduler.Row> rows;
-        private final int totalTime;
+        private final double totalTime;
         private final double averageWaiting;
         private final double averageTurnaround;
 
-        Result(CpuScheduler.Algorithm algorithm, int quantum, List<CpuScheduler.Slice> slices,
-               List<CpuScheduler.Row> rows, int totalTime, double averageWaiting, double averageTurnaround) {
+        Result(CpuScheduler.Algorithm algorithm, double quantum, List<CpuScheduler.Slice> slices,
+               List<CpuScheduler.Row> rows, double totalTime, double averageWaiting, double averageTurnaround) {
             this.algorithm = algorithm;
             this.quantum = quantum;
             this.slices = slices;
@@ -40,7 +41,7 @@ public final class CpuModel {
             return algorithm;
         }
 
-        public int getQuantum() {
+        public double getQuantum() {
             return quantum;
         }
 
@@ -52,7 +53,7 @@ public final class CpuModel {
             return rows;
         }
 
-        public int getTotalTime() {
+        public double getTotalTime() {
             return totalTime;
         }
 
@@ -100,7 +101,7 @@ public final class CpuModel {
      * Reads the raw text from the screen, then runs the simulation.
      * Throws IllegalArgumentException on bad input.
      */
-    public static Result run(CpuScheduler.Algorithm algorithm, int quantum,
+    public static Result run(CpuScheduler.Algorithm algorithm, double quantum,
                              List<JobInput> jobs) {
         if (algorithm == null) throw new IllegalArgumentException("Choose an algorithm.");
         if (jobs == null || jobs.isEmpty())
@@ -110,12 +111,12 @@ public final class CpuModel {
         for (JobInput j : jobs) {
             String name = j.getName().trim();
             if (name.isEmpty()) throw new IllegalArgumentException("Every process needs a name.");
-            int arrival = parseNonNegative(j.getArrival(), "Arrival time of " + name);
-            int burst = parsePositive(j.getBurst(), "Burst time of " + name);
+            double arrival = parseNonNegative(j.getArrival(), "Arrival time of " + name);
+            double burst = parsePositive(j.getBurst(), "Burst time of " + name);
             int priority = 0;
             if (algorithm == CpuScheduler.Algorithm.PRIORITY
                     || algorithm == CpuScheduler.Algorithm.PREEMPTIVE_PRIORITY) {
-                priority = parseNonNegative(j.getPriority(), "Priority of " + name);
+                priority = parseWholeNonNegative(j.getPriority(), "Priority of " + name);
             }
             parsed.add(new CpuScheduler.Job(name, arrival, burst, priority));
         }
@@ -129,24 +130,26 @@ public final class CpuModel {
                 schedulerResult.averageWaiting, schedulerResult.averageTurnaround);
     }
 
-    /** A whole number that is 0 or more. */
-    public static int parseNonNegative(String text, String what) {
-        if (text == null || text.trim().isEmpty())
-            throw new IllegalArgumentException(what + " is empty.");
-        int value;
-        try {
-            value = Integer.parseInt(text.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(what + " must be a whole number.");
-        }
+    /** A finite decimal quantity that is 0 or more. */
+    public static double parseNonNegative(String text, String what) {
+        double value = DecimalInput.parseDecimal(text, what);
         if (value < 0) throw new IllegalArgumentException(what + " cannot be negative.");
         return value;
     }
 
-    /** A whole number that is 1 or more. */
-    public static int parsePositive(String text, String what) {
-        int value = parseNonNegative(text, what);
+    public static double parsePositive(String text, String what) {
+        double value = parseNonNegative(text, what);
         if (value <= 0) throw new IllegalArgumentException(what + " must be greater than 0.");
         return value;
+    }
+
+    private static int parseWholeNonNegative(String text, String what) {
+        try {
+            int value = Integer.parseInt(text.trim());
+            if (value < 0) throw new IllegalArgumentException(what + " cannot be negative.");
+            return value;
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(what + " must be a whole number.");
+        }
     }
 }

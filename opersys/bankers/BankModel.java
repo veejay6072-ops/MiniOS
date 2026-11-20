@@ -1,5 +1,6 @@
 package opersys.bankers;
 
+import opersys.DecimalInput;
 import java.util.List;
 
 /**
@@ -18,12 +19,12 @@ public final class BankModel {
         private final boolean safe;
         private final List<Integer> order;
         private final List<BankStep> steps;
-        private final int[][] allocation;
-        private final int[][] max;
-        private final int[] available;
+        private final double[][] allocation;
+        private final double[][] max;
+        private final double[] available;
 
         Result(boolean safe, List<Integer> order, List<BankStep> steps,
-               int[][] allocation, int[][] max, int[] available) {
+               double[][] allocation, double[][] max, double[] available) {
             this.safe = safe;
             this.order = order;
             this.steps = steps;
@@ -48,15 +49,15 @@ public final class BankModel {
         }
 
         /** The numbers that were checked (so the controller can save them in the history). */
-        public int[][] getAllocation() {
+        public double[][] getAllocation() {
             return allocation;
         }
 
-        public int[][] getMax() {
+        public double[][] getMax() {
             return max;
         }
 
-        public int[] getAvailable() {
+        public double[] getAvailable() {
             return available;
         }
     }
@@ -72,9 +73,9 @@ public final class BankModel {
             throw new IllegalArgumentException("Allocated table must have " + processes + " rows.");
 
         // text -> numbers (this is where "abc" or a negative number gets rejected)
-        int[][] alloc = parseMatrix(allocation, processes, resources, "Allocated");
-        int[][] maxValues = parseMatrix(max, processes, resources, "Max");
-        int[] avail = parseVector(available, "Available");
+        double[][] alloc = parseMatrix(allocation, processes, resources, "Allocated");
+        double[][] maxValues = parseMatrix(max, processes, resources, "Max");
+        double[] avail = parseVector(available, "Available");
 
         BankAlgorithm bank = new BankAlgorithm(avail, maxValues, alloc);
         List<Integer> order = bank.findSafeSequence();
@@ -82,30 +83,26 @@ public final class BankModel {
         return new Result(!order.isEmpty(), order, steps, alloc, maxValues, avail);
     }
 
-    /** Need = Max - Allocated, as text for display. Returns "-" if either value is not a whole number. */
+    /** Need = Max - Allocated, as text for display. Returns "-" if either value is invalid. */
     public static String needText(String max, String allocated) {
         try {
-            return String.valueOf(Integer.parseInt(max.trim()) - Integer.parseInt(allocated.trim()));
-        } catch (NumberFormatException e) {
+            return DecimalInput.format(DecimalInput.parseDecimal(max, "Max")
+                    - DecimalInput.parseDecimal(allocated, "Allocated"));
+        } catch (IllegalArgumentException e) {
             return "-";
         }
     }
 
-    /** Turns text into a whole number that is 0 or more. "what" is the name used in the error message. */
-    public static int parseNonNegative(String text, String what) {
-        int value;
-        try {
-            value = Integer.parseInt(text.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(what + " must be a whole number.");
-        }
+    /** Turns text into a decimal amount that is 0 or more. "what" names the value in errors. */
+    public static double parseNonNegative(String text, String what) {
+        double value = DecimalInput.parseDecimal(text, what);
         if (value < 0) throw new IllegalArgumentException(what + " cannot be negative.");
         return value;
     }
 
-    /** A whole table of text -> a table of numbers, checking every row has the right number of values. */
-    private static int[][] parseMatrix(String[][] text, int rows, int cols, String name) {
-        int[][] out = new int[rows][cols];
+    /** A table of text -> a table of resource amounts, checking every row has the right number of values. */
+    private static double[][] parseMatrix(String[][] text, int rows, int cols, String name) {
+        double[][] out = new double[rows][cols];
         for (int p = 0; p < rows; p++) {
             if (text[p].length != cols)
                 throw new IllegalArgumentException(name + " row P" + p + " must have " + cols + " values.");
@@ -116,8 +113,8 @@ public final class BankModel {
     }
 
     /** One row of text (the Available boxes) -> numbers. */
-    private static int[] parseVector(String[] text, String name) {
-        int[] out = new int[text.length];
+    private static double[] parseVector(String[] text, String name) {
+        double[] out = new double[text.length];
         for (int r = 0; r < text.length; r++)
             out[r] = parseNonNegative(text[r], name + " " + letter(r));
         return out;

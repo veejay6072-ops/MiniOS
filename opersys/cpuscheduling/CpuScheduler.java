@@ -43,11 +43,11 @@ public final class CpuScheduler {
     /** One process typed in by the user. A lower priority number means more important. */
     public static final class Job {
         public final String name;
-        public final int arrival;
-        public final int burst;
+        public final double arrival;
+        public final double burst;
         public final int priority;
 
-        public Job(String name, int arrival, int burst, int priority) {
+        public Job(String name, double arrival, double burst, int priority) {
             this.name = name;
             this.arrival = arrival;
             this.burst = burst;
@@ -59,10 +59,10 @@ public final class CpuScheduler {
     public static final class Slice {
         public static final String IDLE = "IDLE";
         public final String name;
-        public final int start;
-        public final int end;
+        public final double start;
+        public final double end;
 
-        public Slice(String name, int start, int end) {
+        public Slice(String name, double start, double end) {
             this.name = name;
             this.start = start;
             this.end = end;
@@ -72,7 +72,7 @@ public final class CpuScheduler {
             return IDLE.equals(name);
         }
 
-        public int length() {
+        public double length() {
             return end - start;
         }
     }
@@ -80,16 +80,16 @@ public final class CpuScheduler {
     /** The final numbers of one process. */
     public static final class Row {
         public final String name;
-        public final int arrival;
-        public final int burst;
+        public final double arrival;
+        public final double burst;
         public final int priority;
-        public final int start;
-        public final int finish;
-        public final int turnaround;
-        public final int waiting;
+        public final double start;
+        public final double finish;
+        public final double turnaround;
+        public final double waiting;
 
-        public Row(String name, int arrival, int burst, int priority, int start, int finish,
-                   int turnaround, int waiting) {
+        public Row(String name, double arrival, double burst, int priority, double start, double finish,
+                   double turnaround, double waiting) {
             this.name = name;
             this.arrival = arrival;
             this.burst = burst;
@@ -104,14 +104,14 @@ public final class CpuScheduler {
     /** Everything a simulation produces. */
     public static final class Result {
         public final Algorithm algorithm;
-        public final int quantum;               // 0 when the algorithm has no quantum
+        public final double quantum;               // 0 when the algorithm has no quantum
         public final List<Slice> slices;        // the Gantt chart, in time order
         public final List<Row> rows;            // one per process, in the order they were entered
-        public final int totalTime;
+        public final double totalTime;
         public final double averageWaiting;
         public final double averageTurnaround;
 
-        Result(Algorithm algorithm, int quantum, List<Slice> slices, List<Row> rows, int totalTime,
+        Result(Algorithm algorithm, double quantum, List<Slice> slices, List<Row> rows, double totalTime,
                double averageWaiting, double averageTurnaround) {
             this.algorithm = algorithm;
             this.quantum = quantum;
@@ -126,9 +126,9 @@ public final class CpuScheduler {
     /** A job while it is being scheduled. */
     private static final class Work {
         final Job job;
-        int remaining;
-        int start = -1;
-        int finish;
+        double remaining;
+        double start = -1;
+        double finish;
 
         Work(Job job) {
             this.job = job;
@@ -142,7 +142,7 @@ public final class CpuScheduler {
      * @param quantum only used by Round Robin
      * @throws IllegalArgumentException with a readable message if the input is not valid
      */
-    public static Result run(Algorithm algorithm, List<Job> jobs, int quantum) {
+    public static Result run(Algorithm algorithm, List<Job> jobs, double quantum) {
         if (algorithm == null) throw new IllegalArgumentException("Choose an algorithm.");
         if (jobs == null || jobs.isEmpty()) throw new IllegalArgumentException("Add at least one process first.");
         for (Job j : jobs) {
@@ -168,14 +168,14 @@ public final class CpuScheduler {
         double totalTurnaround = 0;
         double totalWaiting = 0;
         for (Work w : work) {
-            int turnaround = w.finish - w.job.arrival;
-            int waiting = turnaround - w.job.burst;
+            double turnaround = w.finish - w.job.arrival;
+            double waiting = turnaround - w.job.burst;
             totalTurnaround += turnaround;
             totalWaiting += waiting;
             rows.add(new Row(w.job.name, w.job.arrival, w.job.burst, w.job.priority,
                     w.start, w.finish, turnaround, waiting));
         }
-        int total = slices.isEmpty() ? 0 : slices.get(slices.size() - 1).end;
+        double total = slices.isEmpty() ? 0 : slices.get(slices.size() - 1).end;
         return new Result(algorithm, algorithm == Algorithm.ROUND_ROBIN ? quantum : 0, slices,
                 Collections.unmodifiableList(rows), total,
                 totalWaiting / work.size(), totalTurnaround / work.size());
@@ -184,13 +184,13 @@ public final class CpuScheduler {
     /** FCFS, SJF and Priority: once a process starts it runs to completion. */
     private static void nonPreemptive(List<Work> all, Algorithm algo, List<Slice> out) {
         List<Work> left = new ArrayList<>(all);
-        int time = 0;
+        double time = 0;
         while (!left.isEmpty()) {
             List<Work> ready = new ArrayList<>();
             for (Work w : left) if (w.job.arrival <= time) ready.add(w);
 
             if (ready.isEmpty()) {   // nobody has arrived yet: the CPU waits
-                int next = Integer.MAX_VALUE;
+                double next = Double.POSITIVE_INFINITY;
                 for (Work w : left) next = Math.min(next, w.job.arrival);
                 addSlice(out, Slice.IDLE, time, next);
                 time = next;
@@ -224,7 +224,7 @@ public final class CpuScheduler {
 
     /** SRTF and Preemptive Priority: reselect the best ready process at each time unit. */
     private static void preemptive(List<Work> all, Algorithm algo, List<Slice> out) {
-        int time = 0;
+        double time = 0;
         int done = 0;
         while (done < all.size()) {
             Work chosen = null;
@@ -234,7 +234,7 @@ public final class CpuScheduler {
             }
 
             if (chosen == null) {
-                int nextArrival = Integer.MAX_VALUE;
+                double nextArrival = Double.POSITIVE_INFINITY;
                 for (Work w : all) {
                     if (w.remaining > 0) nextArrival = Math.min(nextArrival, w.job.arrival);
                 }
@@ -244,9 +244,16 @@ public final class CpuScheduler {
             }
 
             if (chosen.start < 0) chosen.start = time;
-            addSlice(out, chosen.job.name, time, time + 1);
-            chosen.remaining--;
-            time++;
+            double nextArrival = Double.POSITIVE_INFINITY;
+            for (Work w : all) {
+                if (w.remaining > 0 && w.job.arrival > time)
+                    nextArrival = Math.min(nextArrival, w.job.arrival);
+            }
+            double run = Math.min(chosen.remaining, nextArrival - time);
+            if (!Double.isFinite(run)) run = chosen.remaining;
+            addSlice(out, chosen.job.name, time, time + run);
+            chosen.remaining -= run;
+            time += run;
             if (chosen.remaining == 0) {
                 chosen.finish = time;
                 done++;
@@ -262,11 +269,11 @@ public final class CpuScheduler {
     }
 
     /** Round Robin: each process gets at most one quantum, then goes to the back of the queue. */
-    private static void roundRobin(List<Work> all, int quantum, List<Slice> out) {
+    private static void roundRobin(List<Work> all, double quantum, List<Slice> out) {
         List<Work> pending = new ArrayList<>(all);
-        pending.sort(Comparator.comparingInt((Work w) -> w.job.arrival));
+        pending.sort(Comparator.comparingDouble((Work w) -> w.job.arrival));
         Deque<Work> ready = new ArrayDeque<>();
-        int time = 0;
+        double time = 0;
         int next = 0;
         int done = 0;
 
@@ -274,7 +281,7 @@ public final class CpuScheduler {
             while (next < pending.size() && pending.get(next).job.arrival <= time) ready.add(pending.get(next++));
 
             if (ready.isEmpty()) {
-                int arrive = pending.get(next).job.arrival;
+                double arrive = pending.get(next).job.arrival;
                 addSlice(out, Slice.IDLE, time, arrive);
                 time = arrive;
                 continue;
@@ -282,7 +289,7 @@ public final class CpuScheduler {
 
             Work p = ready.poll();
             if (p.start < 0) p.start = time;
-            int run = Math.min(quantum, p.remaining);
+            double run = Math.min(quantum, p.remaining);
             addSlice(out, p.job.name, time, time + run);
             time += run;
             p.remaining -= run;
@@ -299,7 +306,7 @@ public final class CpuScheduler {
         }
     }
 
-    private static void addSlice(List<Slice> out, String name, int start, int end) {
+    private static void addSlice(List<Slice> out, String name, double start, double end) {
         if (end > start) out.add(new Slice(name, start, end));
     }
 

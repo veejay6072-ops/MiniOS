@@ -27,7 +27,7 @@ public class CpuController {
     private void runSimulation() {
         try {
             CpuScheduler.Algorithm algo = view.getSelectedAlgorithm();
-            int quantum = 0;
+            double quantum = 0;
             if (algo == CpuScheduler.Algorithm.ROUND_ROBIN) {
                 quantum = CpuModel.parseNonNegative(view.getQuantumText(), "Quantum");
             }

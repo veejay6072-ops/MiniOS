@@ -28,17 +28,19 @@ public final class BankHistory {
         private final long time;           // when you pressed Check safety
         private final boolean safe;        // the answer: safe or unsafe
         private final int[] order;         // the safe order (empty if unsafe)
-        private final int[] available;     // the vault numbers you typed
-        private final int[][] max;         // the Max table
-        private final int[][] allocation;  // the Allocated table
+        private final double[] available;     // the vault numbers you typed
+        private final double[][] max;         // the Max table
+        private final double[][] allocation;  // the Allocated table
 
         /** The normal way to make an entry (the controller uses this one). */
-        public Entry(long time, boolean safe, List<Integer> order, int[] available, int[][] max, int[][] allocation) {
+        public Entry(long time, boolean safe, List<Integer> order, double[] available,
+                     double[][] max, double[][] allocation) {
             this(time, safe, toArray(order), available, max, allocation);
         }
 
         /** Used when reading the file back. Everything is copied so the saved data can't be changed by accident. */
-        private Entry(long time, boolean safe, int[] order, int[] available, int[][] max, int[][] allocation) {
+        private Entry(long time, boolean safe, int[] order, double[] available,
+                      double[][] max, double[][] allocation) {
             this.time = time;
             this.safe = safe;
             this.order = order.clone();
@@ -59,15 +61,15 @@ public final class BankHistory {
             return order.clone();
         }
 
-        public int[] getAvailable() {
+        public double[] getAvailable() {
             return available.clone();
         }
 
-        public int[][] getMax() {
+        public double[][] getMax() {
             return copy(max);
         }
 
-        public int[][] getAllocation() {
+        public double[][] getAllocation() {
             return copy(allocation);
         }
 
@@ -140,7 +142,7 @@ public final class BankHistory {
                 try {
                     String[] p = line.split("\\|", -1);
                     entries.add(new Entry(Long.parseLong(p[0]), Boolean.parseBoolean(p[1]),
-                            parseRow(p[2]), parseRow(p[3]), parseTable(p[5]), parseTable(p[4])));
+                            parseIntRow(p[2]), parseDoubleRow(p[3]), parseDoubleTable(p[5]), parseDoubleTable(p[4])));
                 } catch (RuntimeException badLine) {
                     // a damaged line? skip it and keep the rest
                 }
@@ -169,14 +171,19 @@ public final class BankHistory {
     }
 
     /** {{0,1},{2,3}} -> "0,1;2,3" */
-    private static String join(int[][] table) {
+    private static String join(double[] row) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < row.length; i++) sb.append(i > 0 ? "," : "").append(row[i]);
+        return sb.toString();
+    }
+
+    private static String join(double[][] table) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < table.length; i++) sb.append(i > 0 ? ";" : "").append(join(table[i]));
         return sb.toString();
     }
 
-    /** "1,3,0" -> {1,3,0}  (an empty text gives an empty row) */
-    private static int[] parseRow(String text) {
+    private static int[] parseIntRow(String text) {
         if (text.trim().isEmpty()) return new int[0];
         String[] parts = text.split(",");
         int[] row = new int[parts.length];
@@ -184,11 +191,18 @@ public final class BankHistory {
         return row;
     }
 
-    /** "0,1;2,3" -> {{0,1},{2,3}} */
-    private static int[][] parseTable(String text) {
+    private static double[] parseDoubleRow(String text) {
+        if (text.trim().isEmpty()) return new double[0];
+        String[] parts = text.split(",");
+        double[] row = new double[parts.length];
+        for (int i = 0; i < parts.length; i++) row[i] = Double.parseDouble(parts[i].trim());
+        return row;
+    }
+
+    private static double[][] parseDoubleTable(String text) {
         String[] rows = text.split(";");
-        int[][] table = new int[rows.length][];
-        for (int i = 0; i < rows.length; i++) table[i] = parseRow(rows[i]);
+        double[][] table = new double[rows.length][];
+        for (int i = 0; i < rows.length; i++) table[i] = parseDoubleRow(rows[i]);
         return table;
     }
 
@@ -198,8 +212,8 @@ public final class BankHistory {
         return out;
     }
 
-    private static int[][] copy(int[][] table) {
-        int[][] out = new int[table.length][];
+    private static double[][] copy(double[][] table) {
+        double[][] out = new double[table.length][];
         for (int i = 0; i < table.length; i++) out[i] = table[i].clone();
         return out;
     }

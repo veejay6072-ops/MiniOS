@@ -12,6 +12,7 @@ import opersys.core.UiKit;
 import opersys.multiprogramming.MultiprogrammingEngine.Job;
 import opersys.multiprogramming.MultiprogrammingEngine.Snap;
 import opersys.multiprogramming.MultiprogrammingEngine.Step;
+import opersys.DecimalInput;
 import opersys.multiprogramming.MultiprogrammingModel.Run;
 
 /**
@@ -274,8 +275,8 @@ public class MultiprogrammingDesign extends JPanel {
     private boolean addJob() {
         String name = nameField.getText().trim();
         if (name.isEmpty()) name = nextJobName();
-        int mem;
-        int burst;
+        double mem;
+        double burst;
         try {
             if (name.matches(".*[\\s,;:].*"))
                 throw new IllegalArgumentException("The name can't have spaces, commas or colons.");
@@ -283,8 +284,8 @@ public class MultiprogrammingDesign extends JPanel {
                 if (job[0].equalsIgnoreCase(name))
                     throw new IllegalArgumentException("There is already a process named " + name + ".");
             }
-            mem = MultiprogrammingModel.parseWhole(entryMemField.getText(), "Memory of " + name);
-            burst = MultiprogrammingModel.parseWhole(entryBurstField.getText(), "Burst of " + name);
+            mem = MultiprogrammingModel.parseDecimal(entryMemField.getText(), "Memory of " + name);
+            burst = MultiprogrammingModel.parseDecimal(entryBurstField.getText(), "Burst of " + name);
             if (mem <= 0) throw new IllegalArgumentException("Process " + name + ": memory must be greater than 0.");
             if (burst <= 0) throw new IllegalArgumentException("Process " + name + ": burst must be greater than 0.");
         } catch (IllegalArgumentException ex) {
@@ -728,7 +729,8 @@ public class MultiprogrammingDesign extends JPanel {
         title.setForeground(TEXT);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         p.add(title);
-        JLabel sub = new JLabel(r.jobs.size() + " jobs · " + r.memory + " KB memory · quantum " + r.quantum
+        JLabel sub = new JLabel(r.jobs.size() + " jobs · " + DecimalInput.format(r.memory)
+                + " KB memory · quantum " + DecimalInput.format(r.quantum)
                 + " · input: " + r.input);
         sub.setFont(ui(Font.PLAIN, 12));
         sub.setForeground(MUTED);
@@ -744,8 +746,8 @@ public class MultiprogrammingDesign extends JPanel {
         double totalTurn = 0;
         double totalWait = 0;
         for (Job j : r.jobs) {
-            int turn = j.finish;
-            int wait = turn - j.burst;
+            double turn = j.finish;
+            double wait = turn - j.burst;
             totalTurn += turn;
             totalWait += wait;
             grid.add(cell("Job " + j.name, true, TEXT, true));
@@ -763,9 +765,10 @@ public class MultiprogrammingDesign extends JPanel {
 
         int n = Math.max(1, r.jobs.size());
         JLabel summary = new JLabel(String.format(
-                "<html>All jobs finished at <b>t=%d</b> · highest degree of multiprogramming <b>%d</b>"
-                        + " · average turnaround <b>%.2f</b> · average waiting <b>%.2f</b></html>",
-                r.total, r.maxDegree, totalTurn / n, totalWait / n));
+                "<html>All jobs finished at <b>t=%s</b> · highest degree of multiprogramming <b>%d</b>"
+                        + " · average turnaround <b>%s</b> · average waiting <b>%s</b></html>",
+                DecimalInput.format(r.total), r.maxDegree,
+                DecimalInput.format(totalTurn / n), DecimalInput.format(totalWait / n)));
         summary.setFont(ui(Font.PLAIN, 12));
         summary.setForeground(TEXT);
         summary.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -968,7 +971,7 @@ public class MultiprogrammingDesign extends JPanel {
             }
             px += sw;
         }
-        int free = s.total - s.used;
+        double free = s.total - s.used;
         double fw = free * scale;
         if (labels && free > 0 && fw >= 56) {
             g2.setColor(MUTED);
@@ -1396,7 +1399,8 @@ public class MultiprogrammingDesign extends JPanel {
             for (int p = 1; p <= n; p++) for (int i = 0; i < n; i++) if (s.state[i] == READY && s.pos[i] == p) inMem.add(i);
             for (int i = 0; i < n; i++) if (s.state[i] == WAITING) wait.add(i);
             for (int i = 0; i < n; i++) if (s.state[i] == DONE) done.add(i);
-            done.sort((a, b) -> s.doneAt[a] != s.doneAt[b] ? Integer.compare(s.doneAt[a], s.doneAt[b]) : Integer.compare(a, b));
+            done.sort((a, b) -> s.doneAt[a] != s.doneAt[b]
+                    ? Double.compare(s.doneAt[a], s.doneAt[b]) : Integer.compare(a, b));
             addGroup(out, 0, inMem);
             addGroup(out, 1, wait);
             addGroup(out, 2, done);
@@ -1432,7 +1436,7 @@ public class MultiprogrammingDesign extends JPanel {
             int right = w - 12;
 
             int cpuPct = s != null && s.running >= 0 ? 100 : 0;
-            int memPct = s == null || s.total == 0 ? 0 : Math.round(s.used * 100f / s.total);
+            int memPct = s == null || s.total == 0 ? 0 : (int) Math.round(s.used * 100.0 / s.total);
 
             // header
             g2.setColor(heat(cpuPct / 100.0));
@@ -1467,7 +1471,7 @@ public class MultiprogrammingDesign extends JPanel {
                 return;
             }
 
-            int maxMem = 1;
+            double maxMem = 1;
             for (Job j : r.jobs) maxMem = Math.max(maxMem, j.memory);
 
             int y = HEAD + 1;
@@ -1765,7 +1769,7 @@ public class MultiprogrammingDesign extends JPanel {
                     drawCentered(g2, r.jobs.get(s.job).name.substring(0, 1).toUpperCase(), (x1 + x2) / 2, y + 20);
                     g2.setFont(ui(Font.PLAIN, 11));
                 }
-                String label = String.valueOf(s.start);
+                String label = DecimalInput.format(s.start);
                 int lw = g2.getFontMetrics().stringWidth(label);
                 if (x1 - lw / 2 > lastLabelRight + 4) {
                     g2.setColor(MUTED);

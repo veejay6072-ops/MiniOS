@@ -13,13 +13,13 @@ import java.util.Arrays;
 public final class BankStep {
     private final int round;           // which pass over the customers this was (the algorithm may loop a few times)
     private final int process;         // which customer we looked at (0 = P0, 1 = P1, ...)
-    private final int[] need;          // what that customer may still ask for (Max - Allocation)
-    private final int[] workBefore;    // what the bank had at that moment
+    private final double[] need;          // what that customer may still ask for (Max - Allocation)
+    private final double[] workBefore;    // what the bank had at that moment
     private final boolean canFinish;   // true = the bank could cover the need, so the customer finishes
-    private final int[] workAfter;     // what the bank has afterwards (same as before if the customer had to wait)
+    private final double[] workAfter;     // what the bank has afterwards (same as before if the customer had to wait)
 
     /** Package-private on purpose: only BankAlgorithm writes steps. Arrays are copied so nobody can change them later. */
-    BankStep(int round, int process, int[] need, int[] workBefore, boolean canFinish, int[] workAfter) {
+    BankStep(int round, int process, double[] need, double[] workBefore, boolean canFinish, double[] workAfter) {
         this.round = round;
         this.process = process;
         this.need = need.clone();
@@ -36,11 +36,11 @@ public final class BankStep {
         return process;
     }
 
-    public int[] getNeed() {
+    public double[] getNeed() {
         return need.clone();
     }
 
-    public int[] getWorkBefore() {
+    public double[] getWorkBefore() {
         return workBefore.clone();
     }
 
@@ -48,7 +48,7 @@ public final class BankStep {
         return canFinish;
     }
 
-    public int[] getWorkAfter() {
+    public double[] getWorkAfter() {
         return workAfter.clone();
     }
 

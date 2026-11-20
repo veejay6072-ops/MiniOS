@@ -137,7 +137,7 @@ public class BankDesign extends JPanel {
     }
 
     /** Fills the form with numbers (used when you load an old check from History). The table resizes to fit. */
-    public void setData(int[][] alloc, int[][] max, int[] avail) {
+    public void setData(double[][] alloc, double[][] max, double[] avail) {
         processSpinner.setValue(alloc.length);
         resourceSpinner.setValue(avail.length);
 

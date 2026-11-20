@@ -1,5 +1,6 @@
 package opersys.core;
 
+import opersys.DecimalInput;
 import java.awt.*;
 import javax.swing.*;
 
@@ -150,6 +151,23 @@ public final class UiKit {
         String[] rows = text.trim().split("\\s*;\\s*");
         int[][] out = new int[rows.length][];
         for (int i = 0; i < rows.length; i++) out[i] = ints(rows[i]);
+        return out;
+    }
+
+    public static double[] doubles(String text) {
+        requireText(text);
+        String[] parts = text.trim().split("[,\\s]+");
+        double[] out = new double[parts.length];
+        for (int i = 0; i < parts.length; i++)
+            out[i] = DecimalInput.parseDecimal(parts[i], "Resource value");
+        return out;
+    }
+
+    public static double[][] doubleMatrix(String text) {
+        requireText(text);
+        String[] rows = text.trim().split("\\s*;\\s*");
+        double[][] out = new double[rows.length][];
+        for (int i = 0; i < rows.length; i++) out[i] = doubles(rows[i]);
         return out;
     }
 

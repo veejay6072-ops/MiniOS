@@ -1,5 +1,6 @@
 package opersys.segmentation;
 
+import opersys.DecimalInput;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,8 +48,8 @@ public final class SegmentationModel {
 
     /** Add a segment and select it. */
     public void add(String name, String baseText, String limitText) {
-        int base = parseNonNegative(baseText, "Base");
-        int limit = parseNonNegative(limitText, "Limit");
+        double base = parseNonNegative(baseText, "Base");
+        double limit = parseNonNegative(limitText, "Limit");
         if (limit == 0) {
             throw new IllegalArgumentException("Limit must be greater than 0.");
         }
@@ -95,7 +96,7 @@ public final class SegmentationModel {
         }
         try {
             int seg = Integer.parseInt(segText.trim());
-            int off = Integer.parseInt(offText.trim());
+            double off = DecimalInput.parseDecimal(offText, "Offset");
             lastResult = engine.translate(seg, off);
             if (lastResult.isNoSegment()) {
                 selected = -1;
@@ -103,17 +104,17 @@ public final class SegmentationModel {
                 selected = seg;
             }
             return null;
-        } catch (NumberFormatException ex) {
-            return "Segment and offset must be whole numbers.";
+        } catch (IllegalArgumentException ex) {
+            return "Segment and offset must be valid numbers.";
         }
     }
 
-    private static int parseNonNegative(String text, String field) {
-        int value;
+    private static double parseNonNegative(String text, String field) {
+        double value;
         try {
-            value = Integer.parseInt(text == null ? "" : text.trim());
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(field + " must be a whole number.");
+            value = DecimalInput.parseDecimal(text, field);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(field + " must be a number.");
         }
         if (value < 0) {
             throw new IllegalArgumentException(field + " cannot be negative.");
@@ -121,11 +122,11 @@ public final class SegmentationModel {
         return value;
     }
 
-    public int total() {
+    public double total() {
         return engine.total();
     }
 
-    public int used() {
+    public double used() {
         return engine.used();
     }
 }

@@ -36,8 +36,8 @@ public class SegmentationDesign extends JPanel {
     private final List<SegmentationEngine.Segment> segments = new ArrayList<>();
     private int selected = -1;
     private SegmentationEngine.Result result;
-    private int total = 4000;
-    private int used;
+    private double total = 4000;
+    private double used;
     private Listener listener;
 
     private final RoundField segField = new RoundField("0", 3);
@@ -79,7 +79,7 @@ public class SegmentationDesign extends JPanel {
     }
 
     public void setState(List<SegmentationEngine.Segment> segments, int selected,
-                         SegmentationEngine.Result result, int total, int used) {
+                         SegmentationEngine.Result result, double total, double used) {
         this.segments.clear();
         this.segments.addAll(segments);
         this.selected = selected;
@@ -716,7 +716,7 @@ public class SegmentationDesign extends JPanel {
             Graphics2D g2 = aa(g);
             int w = getWidth();
             int barY = 30, barH = 38;
-            int total = SegmentationDesign.this.total;
+            double total = SegmentationDesign.this.total;
 
             g2.setColor(new Color(228, 234, 231));
             g2.fillRoundRect(0, barY, w, barH, 12, 12);
@@ -726,8 +726,8 @@ public class SegmentationDesign extends JPanel {
                     boolean sel = i == selected;
                     if (sel != (pass == 1)) continue;
                     SegmentationEngine.Segment s = segments.get(i);
-                    int x = (int) Math.round((double) s.base / total * w);
-                    int bw = Math.max(8, (int) Math.round((double) s.limit / total * w));
+                    int x = (int) Math.round(s.base / total * w);
+                    int bw = Math.max(8, (int) Math.round(s.limit / total * w));
                     g2.setColor(colorOf(i));
                     g2.fillRoundRect(x, barY + 2, bw, barH - 4, 10, 10);
                     if (sel) {
